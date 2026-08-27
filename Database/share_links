@@ -1,0 +1,28 @@
+CREATE TABLE share_links (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    file_id BIGINT UNSIGNED NOT NULL,
+
+    share_token VARCHAR(255) NOT NULL UNIQUE,
+
+    password_hash VARCHAR(255) NULL,
+
+    expires_at TIMESTAMP NULL,
+
+    max_downloads INT UNSIGNED NULL,
+
+    download_count INT UNSIGNED NOT NULL DEFAULT 0,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_share_links_file
+        FOREIGN KEY (file_id)
+        REFERENCES files(id)
+        ON DELETE CASCADE,
+
+    INDEX idx_share_links_file_id (file_id),
+
+    INDEX idx_share_token (share_token)
+);

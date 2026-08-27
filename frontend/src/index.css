@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brown-dark: #3e2723;
+  --color-brown-primary: #5c4033;
+  --color-brown-warm: #8b6f47;
+  --color-beige: #f5efe6;
+  --color-beige-light: #e8dccb;
+  --color-cream: #fffdf9;
+  --color-gold: #b08d57;
+}
+
+/* ================================
+   VAULTSHARE AUTH ANIMATION
+================================ */
+
+.auth-container {
+  isolation: isolate;
+}
+
+/* Form panels */
+.auth-container .form-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: var(--color-cream);
+  transition:
+    transform 0.6s ease-in-out,
+    opacity 0.4s ease-in-out;
+}
+
+/* ================= LOGIN ================= */
+
+.auth-container .sign-in {
+  z-index: 2;
+  opacity: 1;
+}
+
+.auth-container.active .sign-in {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ================= REGISTER ================= */
+
+.auth-container .sign-up {
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-container.active .sign-up {
+  transform: translateX(100%);
+  opacity: 1;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+/* Make sure forms have solid background */
+.auth-container .form-container form {
+  background: var(--color-cream);
+}
+
+/* ================= SLIDING PANEL ================= */
+
+.auth-container .toggle-container {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 150px 0 0 100px;
+  transition: transform 0.6s ease-in-out, border-radius 0.6s ease-in-out;
+  z-index: 20;
+}
+
+.auth-container.active .toggle-container {
+  transform: translateX(-100%);
+  border-radius: 0 150px 100px 0;
+}
+
+/* ================= BROWN BACKGROUND ================= */
+
+.auth-container .toggle {
+  position: relative;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    var(--color-brown-dark),
+    var(--color-brown-primary),
+    var(--color-brown-warm)
+  );
+  color: var(--color-cream);
+  transform: translateX(0);
+  transition: transform 0.6s ease-in-out;
+}
+
+.auth-container.active .toggle {
+  transform: translateX(50%);
+}
+
+/* ================= TOGGLE CONTENT ================= */
+
+.auth-container .toggle-panel {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  padding: 0 40px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  transition:
+    transform 0.6s ease-in-out,
+    opacity 0.4s ease-in-out;
+}
+
+/* LEFT PANEL */
+
+.auth-container .toggle-left {
+  left: 0;
+  transform: translateX(-200%);
+  opacity: 0;
+}
+
+.auth-container.active .toggle-left {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* RIGHT PANEL */
+
+.auth-container .toggle-right {
+  right: 0;
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.auth-container.active .toggle-right {
+  transform: translateX(200%);
+  opacity: 0;
+}
+
+/* ================= TABLET + MOBILE ================= */
+
+@media (max-width: 1023px) {
+  .auth-container {
+    min-height: auto;
+  }
+
+  .auth-container .form-container {
+    position: relative;
+    width: 100%;
+    min-height: auto;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .auth-container .sign-in,
+  .auth-container .sign-up {
+    display: none;
+  }
+
+  .auth-container:not(.active) .sign-in {
+    display: block;
+  }
+
+  .auth-container.active .sign-up {
+    display: block;
+  }
+}

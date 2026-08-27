@@ -1,0 +1,30 @@
+CREATE TABLE files (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    user_id BIGINT UNSIGNED NOT NULL,
+
+    original_name VARCHAR(255) NOT NULL,
+
+    storage_key VARCHAR(500) NOT NULL UNIQUE,
+
+    mime_type VARCHAR(150) NOT NULL,
+
+    size_bytes BIGINT UNSIGNED NOT NULL,
+
+    visibility ENUM('private', 'public') 
+        NOT NULL DEFAULT 'private',
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_files_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    INDEX idx_files_user_id (user_id),
+
+    INDEX idx_files_visibility (visibility)
+);

@@ -1,0 +1,25 @@
+CREATE TABLE file_activities (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    file_id BIGINT UNSIGNED NOT NULL,
+
+    user_id BIGINT UNSIGNED NULL,
+
+    action VARCHAR(50) NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_activities_file
+        FOREIGN KEY (file_id)
+        REFERENCES files(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_activities_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    INDEX idx_activities_file_id (file_id),
+
+    INDEX idx_activities_user_id (user_id)
+);
