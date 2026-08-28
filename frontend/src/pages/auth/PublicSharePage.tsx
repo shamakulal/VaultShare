@@ -33,41 +33,98 @@ const PublicSharePage = () => {
   // ==========================================
 
   useEffect(() => {
-    const fetchShareDetails = async () => {
-      try {
-        setLoading(true);
+  const fetchShareDetails = async () => {
+    try {
+      setLoading(true);
+      setMessage("");
 
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/share/${shareToken}`,
-          {
-            credentials: "include",
-          },
-        );
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/share/${shareToken}`,
+        {
+          credentials: "include",
+        }
+      );
 
-        const data = await response.json();
+      const contentType =
+        response.headers.get("content-type") || "";
 
-        if (!response.ok) {
-          throw new Error(data.message || "Failed to load shared file");
+      // ==========================================
+      // Backend returned an error
+      // ==========================================
+
+      if (!response.ok) {
+        let errorMessage =
+          "Unable to open this shared file.";
+
+        // Only parse JSON if the response is actually JSON
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+
+          errorMessage =
+            data?.message ||
+            "Unable to open this shared file.";
+        } else {
+          // HTML / unexpected response
+          errorMessage =
+            "This share link is no longer available.";
         }
 
-        setFile(data.data.file);
-        setShareDetails(data.data.shareLink);
-
-        // If no password, user can download immediately
-        if (!data.data.shareLink.passwordProtected) {
-          setVerified(true);
-        }
-      } catch (error) {
-        setMessage(
-          error instanceof Error ? error.message : "Failed to load shared file",
-        );
-      } finally {
-        setLoading(false);
+        setMessage(errorMessage);
+        return;
       }
-    };
 
+      // ==========================================
+      // Successful response must be JSON
+      // ==========================================
+
+      if (!contentType.includes("application/json")) {
+        setMessage(
+          "Unable to open this shared file. Unexpected response from server."
+        );
+        return;
+      }
+
+      const data = await response.json();
+
+      // ==========================================
+      // Validate response structure
+      // ==========================================
+
+      if (!data?.data?.file || !data?.data?.shareLink) {
+        setMessage(
+          "Unable to load the shared file."
+        );
+        return;
+      }
+
+      setFile(data.data.file);
+      setShareDetails(data.data.shareLink);
+
+      // If no password, user can download immediately
+      if (!data.data.shareLink.passwordProtected) {
+        setVerified(true);
+      }
+
+    } catch (error) {
+      console.error(
+        "Failed to load share details:",
+        error
+      );
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to open this shared file."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (shareToken) {
     fetchShareDetails();
-  }, [shareToken]);
+  }
+}, [shareToken]);
 
   // ==========================================
   // Verify password
