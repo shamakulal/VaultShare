@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -21,15 +20,14 @@ const PublicSharePage = () => {
   const { shareToken } = useParams();
 
   const [file, setFile] = useState<SharedFile | null>(null);
-  const [shareDetails, setShareDetails] =
-    useState<ShareDetails | null>(null);
+  const [shareDetails, setShareDetails] = useState<ShareDetails | null>(null);
 
   const [password, setPassword] = useState("");
   const [verified, setVerified] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-
+  const [downloading, setDownloading] = useState(false);
   // ==========================================
   // Load public share details
   // ==========================================
@@ -43,15 +41,13 @@ const PublicSharePage = () => {
           `${import.meta.env.VITE_API_URL}/share/${shareToken}`,
           {
             credentials: "include",
-          }
+          },
         );
 
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(
-            data.message || "Failed to load shared file"
-          );
+          throw new Error(data.message || "Failed to load shared file");
         }
 
         setFile(data.data.file);
@@ -63,9 +59,7 @@ const PublicSharePage = () => {
         }
       } catch (error) {
         setMessage(
-          error instanceof Error
-            ? error.message
-            : "Failed to load shared file"
+          error instanceof Error ? error.message : "Failed to load shared file",
         );
       } finally {
         setLoading(false);
@@ -94,25 +88,54 @@ const PublicSharePage = () => {
           body: JSON.stringify({
             password,
           }),
-        }
+        },
       );
+
+      const contentType = response.headers.get("content-type") || "";
+
+      // ==========================================
+      // Backend returned an error
+      // ==========================================
+
+      if (!response.ok) {
+        let errorMessage = "Password verification failed.";
+
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+
+          errorMessage = data?.message || "Password verification failed.";
+        } else {
+          errorMessage = "Unable to verify password. Please try again.";
+        }
+
+        setMessage(errorMessage);
+        return;
+      }
+
+      // ==========================================
+      // Successful verification
+      // ==========================================
+
+      if (!contentType.includes("application/json")) {
+        setMessage("Unexpected response from server. Please try again.");
+        return;
+      }
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Incorrect password"
-        );
+      if (!data?.data?.verified) {
+        setMessage("Password verification failed.");
+        return;
       }
 
       setVerified(true);
       setPassword("");
       setMessage("");
     } catch (error) {
+      console.error("Password verification error:", error);
+
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "Password verification failed"
+        error instanceof Error ? error.message : "Password verification failed",
       );
     }
   };
@@ -121,11 +144,71 @@ const PublicSharePage = () => {
   // Download file
   // ==========================================
 
-  const handleDownload = () => {
-    window.location.href =
-      `${import.meta.env.VITE_API_URL}/share/${shareToken}/download`;
-  };
+  const handleDownload = async () => {
+    try {
+      setMessage("");
+      setDownloading(true);
 
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/share/${shareToken}/download`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!response.ok) {
+        let errorMessage = "Unable to download the file.";
+
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+
+          errorMessage = data?.message || "Unable to download the file.";
+        } else {
+          errorMessage =
+            "Unable to download the file. The share link may have expired or reached its download limit.";
+        }
+
+        setMessage(errorMessage);
+        return;
+      }
+
+      if (
+        contentType.includes("application/json") ||
+        contentType.includes("text/html")
+      ) {
+        setMessage("Unable to download the file. Please try again.");
+        return;
+      }
+
+      const blob = await response.blob();
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = file?.originalName || "download";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+
+      setMessage(
+        error instanceof Error ? error.message : "Unable to download the file.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
   // ==========================================
   // Helper functions
   // ==========================================
@@ -153,10 +236,7 @@ const PublicSharePage = () => {
       return "IMG";
     }
 
-    if (
-      file.mimeType.includes("word") ||
-      file.mimeType.includes("document")
-    ) {
+    if (file.mimeType.includes("word") || file.mimeType.includes("document")) {
       return "DOC";
     }
 
@@ -221,12 +301,8 @@ const PublicSharePage = () => {
           </p>
 
           <div className="mt-7 border-t border-brown-primary/10 pt-5">
-            <p className="text-sm font-semibold text-brown-dark">
-              VaultShare
-            </p>
-            <p className="mt-1 text-xs text-brown-warm">
-              Secure file sharing
-            </p>
+            <p className="text-sm font-semibold text-brown-dark">VaultShare</p>
+            <p className="mt-1 text-xs text-brown-warm">Secure file sharing</p>
           </div>
         </div>
       </div>
@@ -248,12 +324,8 @@ const PublicSharePage = () => {
             </div>
 
             <div>
-              <h1 className="text-lg font-bold text-brown-dark">
-                VaultShare
-              </h1>
-              <p className="text-xs text-brown-warm">
-                Secure file sharing
-              </p>
+              <h1 className="text-lg font-bold text-brown-dark">VaultShare</h1>
+              <p className="text-xs text-brown-warm">Secure file sharing</p>
             </div>
           </div>
 
@@ -316,9 +388,7 @@ const PublicSharePage = () => {
                 </p>
 
                 <p className="mt-2 text-sm font-bold text-brown-dark sm:text-base">
-                  {shareDetails.passwordProtected
-                    ? "Protected"
-                    : "Open access"}
+                  {shareDetails.passwordProtected ? "Protected" : "Open access"}
                 </p>
               </div>
             </div>
@@ -354,9 +424,7 @@ const PublicSharePage = () => {
                     type="password"
                     placeholder="Enter file password"
                     value={password}
-                    onChange={(event) =>
-                      setPassword(event.target.value)
-                    }
+                    onChange={(event) => setPassword(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         handleVerifyPassword();
@@ -395,9 +463,10 @@ const PublicSharePage = () => {
 
                   <button
                     onClick={handleDownload}
-                    className="mt-6 w-full rounded-xl bg-brown-dark px-5 py-4 text-sm font-bold text-cream shadow-lg transition hover:bg-brown-primary active:scale-[0.99]"
+                    disabled={downloading}
+                    className="mt-6 w-full rounded-xl bg-brown-dark px-5 py-4 text-sm font-bold text-cream shadow-lg transition hover:bg-brown-primary active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    ↓ Download File
+                    {downloading ? "Downloading..." : "↓ Download File"}
                   </button>
                 </div>
               </div>
@@ -423,4 +492,3 @@ const PublicSharePage = () => {
 };
 
 export default PublicSharePage;
-
