@@ -202,7 +202,21 @@ export const completeUpload = asyncHandler(
     );
 
     const fileId = (result as any).insertId;
-
+await pool.execute(
+  `
+  INSERT INTO file_activities (
+    file_id,
+    user_id,
+    action
+  )
+  VALUES (?, ?, ?)
+  `,
+  [
+    fileId,
+    req.user.id,
+    "UPLOAD",
+  ]
+);
     res.status(201).json({
       success: true,
       message: "File uploaded successfully",
@@ -263,7 +277,6 @@ export const getMyFiles = asyncHandler(
     });
   },
 );
-
 export const downloadFile = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     if (!req.user) {
@@ -278,7 +291,7 @@ export const downloadFile = asyncHandler(
 
     const userId = req.user.id;
 
-    // Get file from MySQL
+    // Get file metadata + verify ownership
     const [rows] = await pool.execute(
       `
       SELECT
@@ -297,39 +310,46 @@ export const downloadFile = asyncHandler(
     const files = rows as any[];
 
     if (files.length === 0) {
-      throw new AppError("File not found or you do not have permission", 404);
+      throw new AppError(
+        "File not found or you do not have permission",
+        404,
+      );
     }
 
     const file = files[0];
 
-    // Download from Supabase Storage
+    // Generate temporary signed URL
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET!)
-      .download(file.storage_key);
+      .createSignedUrl(
+        file.storage_key,
+        60,
+        {
+          download: true,
+        },
+      );
 
-    if (error || !data) {
-      console.error("Supabase download error:", error);
+    if (error || !data?.signedUrl) {
+      console.error("Supabase signed URL error:", error);
 
-      throw new AppError("Failed to download file from storage", 500);
+      throw new AppError(
+        "Failed to create download URL",
+        500,
+      );
     }
 
-    // Convert Blob to Buffer
-    const arrayBuffer = await data.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Send file to browser
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(file.original_name)}"`,
-    );
-
-    res.setHeader("Content-Type", file.mime_type || "application/octet-stream");
-
-    res.setHeader("Content-Length", buffer.length);
-
-    return res.send(buffer);
+    // Return URL to frontend
+    return res.status(200).json({
+      success: true,
+      data: {
+        downloadUrl: data.signedUrl,
+        fileName: file.original_name,
+      },
+    });
   },
 );
+
+
 export const updateFileVisibility = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     // 1. Check authenticated user

@@ -22,6 +22,7 @@ const DashboardPage = () => {
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [toastType, setToastType] = useState<"success" | "error">("success");
+const [uploadProgress, setUploadProgress] = useState(0);
 
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [sharePassword, setSharePassword] = useState("");
@@ -91,6 +92,7 @@ const DashboardPage = () => {
 
     try {
       setLoading(true);
+      setUploadProgress(0);
       setMessage("");
 
       // ==========================================
@@ -125,16 +127,19 @@ const DashboardPage = () => {
       // ==========================================
 
       const { error: uploadError } = await supabase.storage
-        .from("vaultshare-files")
-        .upload(storageKey, selectedFile, {
-          contentType: selectedFile.type,
-          upsert: false,
-        });
+  .from("vaultshare-files")
+  .upload(storageKey, selectedFile, {
+    contentType: selectedFile.type,
+    upsert: false,
+  });
 
-      if (uploadError) {
-        console.error("Supabase upload error:", uploadError);
-        throw new Error(uploadError.message);
-      }
+if (uploadError) {
+  console.error("Supabase upload error:", uploadError);
+
+  throw new Error(
+    uploadError.message || "Failed to upload file to storage"
+  );
+}
 
       // ==========================================
       // STEP 3: Save metadata in MySQL
@@ -597,13 +602,33 @@ const DashboardPage = () => {
                 />
               </label>
 
-              <button
-                onClick={handleUpload}
-                disabled={loading || !selectedFile}
-                className="mt-4 w-full rounded-xl bg-brown-primary px-5 py-3.5 text-sm font-bold text-cream transition hover:bg-brown-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? "Uploading your file..." : "Upload to Vault"}
-              </button>
+              {loading ? (
+                <div className="mt-4 w-full rounded-xl bg-beige-light p-3">
+                  <div className="flex items-center justify-between text-sm font-semibold text-brown-dark">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+
+                  <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-brown-primary/10">
+                    <div
+                      className="h-full rounded-full bg-brown-primary transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-center text-xs text-brown-warm">
+                    Please don't close this page while the file is uploading.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleUpload}
+                  disabled={!selectedFile}
+                  className="mt-4 w-full rounded-xl bg-brown-primary px-5 py-3.5 text-sm font-bold text-cream transition hover:bg-brown-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Upload to Vault
+                </button>
+              )}
             </div>
           </div>
         </section>
