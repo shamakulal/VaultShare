@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../../config/supabase";
+import Toast from "../../components/Toast";
 interface FileItem {
   id: number;
   original_name: string;
@@ -18,6 +20,8 @@ const DashboardPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<"success" | "error">("success");
 
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [sharePassword, setSharePassword] = useState("");
@@ -34,6 +38,14 @@ const DashboardPage = () => {
   // ==========================================
   // Load user's files
   // ==========================================
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setMessage(text);
+    setToastType(type);
+
+    setTimeout(() => {
+      setMessage("");
+    }, 3500);
+  };
 
   const fetchFiles = async () => {
     try {
@@ -81,33 +93,89 @@ const DashboardPage = () => {
       setLoading(true);
       setMessage("");
 
-      const formData = new FormData();
+      // ==========================================
+      // STEP 1: Ask backend for signed upload URL
+      // ==========================================
 
-      formData.append("file", selectedFile);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/files/upload`,
+      const urlResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/upload-url`,
         {
           method: "POST",
           credentials: "include",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: selectedFile.name,
+            mimeType: selectedFile.type,
+          }),
         },
       );
 
-      const data = await response.json();
+      const urlData = await urlResponse.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || "File upload failed");
+      if (!urlResponse.ok) {
+        throw new Error(urlData.message || "Failed to prepare upload");
       }
 
-      setMessage("File uploaded successfully");
+      const { path: storageKey, token } = urlData.data;
+
+      // ==========================================
+      // STEP 2: Upload DIRECTLY to Supabase
+      // ==========================================
+
+      const { error: uploadError } = await supabase.storage
+        .from("vaultshare-files")
+        .upload(storageKey, selectedFile, {
+          contentType: selectedFile.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+        throw new Error(uploadError.message);
+      }
+
+      // ==========================================
+      // STEP 3: Save metadata in MySQL
+      // ==========================================
+
+      const completeResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/upload-complete`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            originalName: selectedFile.name,
+            storageKey,
+            mimeType: selectedFile.type,
+            sizeBytes: selectedFile.size,
+          }),
+        },
+      );
+
+      const completeData = await completeResponse.json();
+
+      if (!completeResponse.ok) {
+        throw new Error(
+          completeData.message || "Failed to save file information",
+        );
+      }
+
+      // ==========================================
+      // SUCCESS
+      // ==========================================
 
       setSelectedFile(null);
 
-      // Refresh file list
+      showToast("File uploaded successfully!");
+
       await fetchFiles();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "File upload failed");
+      showToast(error instanceof Error ? error.message : "File upload failed");
     } finally {
       setLoading(false);
     }
@@ -186,7 +254,7 @@ const DashboardPage = () => {
 
       setCreatedShareUrl(publicUrl);
 
-      setMessage("Share link created successfully!");
+      showToast("Share link created successfully!");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to create share link",
@@ -199,9 +267,9 @@ const DashboardPage = () => {
     try {
       await navigator.clipboard.writeText(createdShareUrl);
 
-      setMessage("Share link copied to clipboard!");
+      showToast("Share link copied!");
     } catch {
-      setMessage("Failed to copy share link");
+      showToast("Failed to copy share link");
     }
   };
 
@@ -215,7 +283,7 @@ const DashboardPage = () => {
 
       window.location.href = `${import.meta.env.VITE_API_URL}/files/${fileId}/download`;
     } catch (error) {
-      setMessage(
+      showToast(
         error instanceof Error ? error.message : "Failed to download file",
       );
     } finally {
@@ -255,7 +323,7 @@ const DashboardPage = () => {
         previousFiles.filter((file) => file.id !== fileId),
       );
 
-      setMessage("File deleted successfully!");
+      showToast("File deleted successfully!");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to delete file",
@@ -304,7 +372,7 @@ const DashboardPage = () => {
         ),
       );
 
-      setMessage(
+      showToast(
         `File is now ${newVisibility === "public" ? "public" : "private"}`,
       );
     } catch (error) {
@@ -385,6 +453,13 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-beige text-brown-dark">
+      <Toast message={message} type={toastType} />
+      {/* {toast && (
+        <div className="fixed right-5 top-5 z-[9999] animate-in rounded-xl bg-brown-dark px-5 py-3 text-sm font-semibold text-cream shadow-xl">
+          ✓ {toast}
+        </div>
+      )} */}
+
       {/* ================= HEADER ================= */}
       <header className="border-b border-brown-warm/20 bg-cream">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -684,8 +759,8 @@ const DashboardPage = () => {
         {filteredFiles.length > 0 && (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredFiles.map((file) => {
-             // const isImage = file.mime_type.startsWith("image/");
-             // const isPdf = file.mime_type === "application/pdf";
+              // const isImage = file.mime_type.startsWith("image/");
+              // const isPdf = file.mime_type === "application/pdf";
               const fileType = getFileType(file.mime_type);
               return (
                 <article

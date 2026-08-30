@@ -3,6 +3,8 @@ import multer from "multer";
 
 import {
   uploadFile,
+  createUploadUrl,
+  completeUpload,
   getMyFiles,
   downloadFile,
   updateFileVisibility,
@@ -59,7 +61,17 @@ router.post(
   uploadFile
 );
 
+router.post(
+  "/upload-url",
+  protect,
+  createUploadUrl
+);
 
+router.post(
+  "/upload-complete",
+  protect,
+  completeUpload
+);
 router.get(
   "/",
   protect,

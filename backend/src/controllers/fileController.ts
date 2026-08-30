@@ -102,6 +102,129 @@ export const uploadFile = asyncHandler(
     }
   },
 );
+export const createUploadUrl = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const { fileName, mimeType } = req.body;
+
+    if (!fileName || !mimeType) {
+      throw new AppError("File name and MIME type are required", 400);
+    }
+
+    const extension = path.extname(fileName).toLowerCase();
+
+    const uniqueFileName = `${crypto.randomUUID()}${extension}`;
+
+    const storageKey = `users/${req.user.id}/${uniqueFileName}`;
+
+    const { data, error } = await supabase.storage
+      .from(process.env.SUPABASE_BUCKET!)
+      .createSignedUploadUrl(storageKey);
+
+    if (error || !data) {
+      console.error("Create signed upload URL error:", error);
+
+      throw new AppError(
+        "Failed to create upload URL",
+        500
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        path: storageKey,
+        token: data.token,
+      },
+    });
+  }
+);
+
+export const completeUpload = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const {
+      originalName,
+      storageKey,
+      mimeType,
+      sizeBytes,
+    } = req.body;
+
+    if (
+      !originalName ||
+      !storageKey ||
+      !mimeType ||
+      !sizeBytes
+    ) {
+      throw new AppError(
+        "Missing upload metadata",
+        400
+      );
+    }
+
+    // Security check:
+    // User can only save files inside their own folder
+    const expectedPrefix = `users/${req.user.id}/`;
+
+    if (!storageKey.startsWith(expectedPrefix)) {
+      throw new AppError(
+        "Invalid storage path",
+        403
+      );
+    }
+
+    const [result] = await pool.execute(
+      `
+      INSERT INTO files (
+        user_id,
+        original_name,
+        storage_key,
+        mime_type,
+        size_bytes,
+        visibility
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        req.user.id,
+        originalName,
+        storageKey,
+        mimeType,
+        sizeBytes,
+        "private",
+      ]
+    );
+
+    const fileId = (result as any).insertId;
+
+    res.status(201).json({
+      success: true,
+      message: "File uploaded successfully",
+      data: {
+        file: {
+          id: fileId,
+          originalName,
+          storageKey,
+          mimeType,
+          sizeBytes,
+          visibility: "private",
+          createdAt: new Date(),
+        },
+      },
+    });
+  }
+);
+
+
+
+
+
 
 export const getMyFiles = asyncHandler(
   async (req: AuthRequest, res: Response) => {

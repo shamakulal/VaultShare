@@ -32,28 +32,20 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   // 4. Create user
   const [result] = await pool.execute(
     `INSERT INTO users (name, email, password_hash)
-       VALUES (?, ?, ?)`,
+     VALUES (?, ?, ?)`,
     [name, email, passwordHash],
   );
 
   // 5. Get new user ID
   const userId = (result as any).insertId;
 
-  // 6. Generate JWT
-  const token = generateToken(userId);
+  // 6. DO NOT generate JWT here
+  // Registration should only create the account.
 
-  // 7. Store JWT in HTTP-only cookie
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    maxAge: 24 * 60 * 60 * 1000,
-  });
-
-  // 8. Return response
+  // 7. Return success response
   res.status(201).json({
     success: true,
-    message: "User registered successfully",
+    message: "Account created successfully. Please sign in.",
     data: {
       user: {
         id: userId,

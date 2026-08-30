@@ -6,7 +6,7 @@ import "dotenv/config";
 import fileRoutes from "./routes/fileRoutes";
 import authRoutes from "./routes/authRoutes";
 import shareRoutes from "./routes/shareRoutes";
-
+import pool from "./config/db";
 const app = express();
 
 // ==========================================
@@ -17,7 +17,10 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://vaultshare10.netlify.app",
+    ],
     credentials: true,
   }),
 );
@@ -30,11 +33,24 @@ app.use(cookieParser());
 // HEALTH CHECK
 // ==========================================
 
-app.get("/api/health", (_req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "VaultShare API is running",
-  });
+app.get("/api/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+
+    res.status(200).json({
+      success: true,
+      message: "VaultShare backend is healthy",
+      database: "connected",
+    });
+  } catch (error) {
+    console.error("Health check failed:", error);
+
+    res.status(503).json({
+      success: false,
+      message: "Backend is running but database is unavailable",
+      database: "disconnected",
+    });
+  }
 });
 
 // ==========================================
