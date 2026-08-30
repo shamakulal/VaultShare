@@ -218,49 +218,41 @@ const PublicSharePage = () => {
       response.headers.get("content-type") || "";
 
     if (!response.ok) {
-      let errorMessage =
-        "Unable to download the file.";
+      let errorMessage = "Unable to download the file.";
 
       if (contentType.includes("application/json")) {
         const data = await response.json();
-
         errorMessage =
-          data?.message ||
-          "Unable to download the file.";
+          data?.message || errorMessage;
       }
 
-      setMessage(errorMessage);
-      return;
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
 
     if (!data?.data?.downloadUrl) {
-      setMessage(
+      throw new Error(
         "Download URL was not returned by the server.",
       );
-      return;
     }
 
     // IMPORTANT:
     // Do NOT fetch the Supabase URL.
-    // Let the browser request it directly.
+    // Do NOT use response.blob().
+    // Send the browser directly to the signed URL.
 
-    window.location.href =
-      data.data.downloadUrl;
+    window.location.assign(data.data.downloadUrl);
 
   } catch (error) {
-    console.error(
-      "Download error:",
-      error,
-    );
+    console.error("Download error:", error);
 
     setMessage(
       error instanceof Error
         ? error.message
         : "Unable to download the file.",
     );
-  } finally {
+
     setDownloading(false);
   }
 };

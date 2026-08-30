@@ -283,20 +283,61 @@ if (uploadError) {
     navigate("/auth");
   };
   const handleDownload = async (fileId: number) => {
-    try {
-      setActionLoading(fileId);
+  try {
+    setActionLoading(fileId);
+    setMessage("");
 
-      window.location.href = `${import.meta.env.VITE_API_URL}/files/${fileId}/download`;
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Failed to download file",
-      );
-    } finally {
-      setTimeout(() => {
-        setActionLoading(null);
-      }, 1000);
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/files/${fileId}/download`,
+      {
+        method: "GET",
+        credentials: "include",
+      },
+    );
+
+    const contentType = response.headers.get("content-type") || "";
+
+    if (!response.ok) {
+      let errorMessage = "Failed to download file.";
+
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        errorMessage = data?.message || errorMessage;
+      }
+
+      throw new Error(errorMessage);
     }
-  };
+
+    const data = await response.json();
+
+    if (!data?.data?.downloadUrl) {
+      throw new Error("Download URL was not returned by the server.");
+    }
+
+    // Direct browser download.
+    // Do NOT fetch the Supabase URL from JavaScript.
+    const link = document.createElement("a");
+    link.href = data.data.downloadUrl;
+    link.download = data.data.fileName || "download";
+    link.target = "_self";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+  } catch (error) {
+    console.error("Download error:", error);
+
+    showToast(
+      error instanceof Error
+        ? error.message
+        : "Failed to download file",
+      "error",
+    );
+  } finally {
+    setActionLoading(null);
+  }
+};
   const handleDeleteFile = async (fileId: number) => {
     const confirmed = window.confirm(
       "Are you sure you want to permanently delete this file?",
