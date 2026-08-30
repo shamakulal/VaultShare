@@ -102,6 +102,143 @@ export const uploadFile = asyncHandler(
     }
   },
 );
+export const createUploadUrl = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const { fileName, mimeType } = req.body;
+
+    if (!fileName || !mimeType) {
+      throw new AppError("File name and MIME type are required", 400);
+    }
+
+    const extension = path.extname(fileName).toLowerCase();
+
+    const uniqueFileName = `${crypto.randomUUID()}${extension}`;
+
+    const storageKey = `users/${req.user.id}/${uniqueFileName}`;
+
+    const { data, error } = await supabase.storage
+      .from(process.env.SUPABASE_BUCKET!)
+      .createSignedUploadUrl(storageKey);
+
+    if (error || !data) {
+      console.error("Create signed upload URL error:", error);
+
+      throw new AppError(
+        "Failed to create upload URL",
+        500
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        path: storageKey,
+        token: data.token,
+      },
+    });
+  }
+);
+
+export const completeUpload = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const {
+      originalName,
+      storageKey,
+      mimeType,
+      sizeBytes,
+    } = req.body;
+
+    if (
+      !originalName ||
+      !storageKey ||
+      !mimeType ||
+      !sizeBytes
+    ) {
+      throw new AppError(
+        "Missing upload metadata",
+        400
+      );
+    }
+
+    // Security check:
+    // User can only save files inside their own folder
+    const expectedPrefix = `users/${req.user.id}/`;
+
+    if (!storageKey.startsWith(expectedPrefix)) {
+      throw new AppError(
+        "Invalid storage path",
+        403
+      );
+    }
+
+    const [result] = await pool.execute(
+      `
+      INSERT INTO files (
+        user_id,
+        original_name,
+        storage_key,
+        mime_type,
+        size_bytes,
+        visibility
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        req.user.id,
+        originalName,
+        storageKey,
+        mimeType,
+        sizeBytes,
+        "private",
+      ]
+    );
+
+    const fileId = (result as any).insertId;
+await pool.execute(
+  `
+  INSERT INTO file_activities (
+    file_id,
+    user_id,
+    action
+  )
+  VALUES (?, ?, ?)
+  `,
+  [
+    fileId,
+    req.user.id,
+    "UPLOAD",
+  ]
+);
+    res.status(201).json({
+      success: true,
+      message: "File uploaded successfully",
+      data: {
+        file: {
+          id: fileId,
+          originalName,
+          storageKey,
+          mimeType,
+          sizeBytes,
+          visibility: "private",
+          createdAt: new Date(),
+        },
+      },
+    });
+  }
+);
+
+
+
+
+
 
 export const getMyFiles = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -140,7 +277,6 @@ export const getMyFiles = asyncHandler(
     });
   },
 );
-
 export const downloadFile = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     if (!req.user) {
@@ -155,7 +291,7 @@ export const downloadFile = asyncHandler(
 
     const userId = req.user.id;
 
-    // Get file from MySQL
+    // Get file metadata + verify ownership
     const [rows] = await pool.execute(
       `
       SELECT
@@ -174,39 +310,46 @@ export const downloadFile = asyncHandler(
     const files = rows as any[];
 
     if (files.length === 0) {
-      throw new AppError("File not found or you do not have permission", 404);
+      throw new AppError(
+        "File not found or you do not have permission",
+        404,
+      );
     }
 
     const file = files[0];
 
-    // Download from Supabase Storage
+    // Generate temporary signed URL
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET!)
-      .download(file.storage_key);
+      .createSignedUrl(
+        file.storage_key,
+        60,
+        {
+          download: true,
+        },
+      );
 
-    if (error || !data) {
-      console.error("Supabase download error:", error);
+    if (error || !data?.signedUrl) {
+      console.error("Supabase signed URL error:", error);
 
-      throw new AppError("Failed to download file from storage", 500);
+      throw new AppError(
+        "Failed to create download URL",
+        500,
+      );
     }
 
-    // Convert Blob to Buffer
-    const arrayBuffer = await data.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Send file to browser
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(file.original_name)}"`,
-    );
-
-    res.setHeader("Content-Type", file.mime_type || "application/octet-stream");
-
-    res.setHeader("Content-Length", buffer.length);
-
-    return res.send(buffer);
+    // Return URL to frontend
+    return res.status(200).json({
+      success: true,
+      data: {
+        downloadUrl: data.signedUrl,
+        fileName: file.original_name,
+      },
+    });
   },
 );
+
+
 export const updateFileVisibility = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     // 1. Check authenticated user

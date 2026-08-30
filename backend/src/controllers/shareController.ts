@@ -1,4 +1,3 @@
-
 import bcrypt from "bcrypt";
 
 import crypto from "crypto";
@@ -8,7 +7,6 @@ import asyncHandler from "../utils/asyncHandler";
 import { supabase } from "../config/supabase";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { Request, Response } from "express";
-
 
 export const createShareLink = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -327,8 +325,8 @@ export const verifySharePassword = asyncHandler(
     res.cookie(accessCookieName, "verified", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 15 * 60 * 1000,
     });
 
     return res.status(200).json({
@@ -345,7 +343,7 @@ export const downloadSharedFile = asyncHandler(
     const { shareToken } = req.params;
 
     // ==========================================
-    // 1. Find share link and file
+    // 1. Find share link + file
     // ==========================================
 
     const [rows] = await pool.execute(
@@ -364,8 +362,11 @@ export const downloadSharedFile = asyncHandler(
         f.mime_type
 
       FROM share_links sl
-      INNER JOIN files f ON sl.file_id = f.id
+      INNER JOIN files f
+        ON sl.file_id = f.id
+
       WHERE sl.share_token = ?
+
       LIMIT 1
       `,
       [shareToken],
@@ -380,11 +381,14 @@ export const downloadSharedFile = asyncHandler(
     const shareLink = shareLinks[0];
 
     // ==========================================
-    // 2. Check link status
+    // 2. Check active
     // ==========================================
 
     if (!shareLink.is_active) {
-      throw new AppError("This share link has been disabled", 403);
+      throw new AppError(
+        "This share link has been disabled",
+        403,
+      );
     }
 
     // ==========================================
@@ -395,11 +399,14 @@ export const downloadSharedFile = asyncHandler(
       shareLink.expires_at &&
       new Date(shareLink.expires_at) < new Date()
     ) {
-      throw new AppError("This share link has expired", 403);
+      throw new AppError(
+        "This share link has expired",
+        403,
+      );
     }
 
     // ==========================================
-    // 4. Check maximum downloads
+    // 4. Check download limit
     // ==========================================
 
     if (
@@ -413,13 +420,16 @@ export const downloadSharedFile = asyncHandler(
     }
 
     // ==========================================
-    // 5. Check password access
+    // 5. Check password
     // ==========================================
 
     if (shareLink.password_hash) {
-      const accessCookieName = `share_access_${shareLink.share_link_id}`;
+      const accessCookieName =
+        `share_access_${shareLink.share_link_id}`;
 
-      if (req.cookies?.[accessCookieName] !== "verified") {
+      if (
+        req.cookies?.[accessCookieName] !== "verified"
+      ) {
         throw new AppError(
           "Password verification is required before downloading",
           401,
@@ -428,28 +438,33 @@ export const downloadSharedFile = asyncHandler(
     }
 
     // ==========================================
-    // 6. Download file from Supabase Storage
+    // 6. Generate temporary signed URL
     // ==========================================
 
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET!)
-      .download(shareLink.storage_key);
+      .createSignedUrl(
+        shareLink.storage_key,
+        60,
+        {
+          download: true,
+        },
+      );
 
-    if (error || !data) {
-      console.error("Supabase shared download error:", error);
+    if (error || !data?.signedUrl) {
+      console.error(
+        "Supabase signed URL error:",
+        error,
+      );
 
       throw new AppError(
-        "Failed to download shared file from storage",
+        "Failed to create download URL",
         500,
       );
     }
 
-    // Convert Supabase Blob to Node.js Buffer
-    const arrayBuffer = await data.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     // ==========================================
-    // 7. Increase download count
+    // 7. Increment download count
     // ==========================================
 
     await pool.execute(
@@ -462,23 +477,15 @@ export const downloadSharedFile = asyncHandler(
     );
 
     // ==========================================
-    // 8. Send file to browser
+    // 8. Return signed URL
     // ==========================================
 
-    res.setHeader(
-      "Content-Type",
-      shareLink.mime_type || "application/octet-stream",
-    );
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(
-        shareLink.original_name,
-      )}"`,
-    );
-
-    res.setHeader("Content-Length", buffer.length);
-
-    return res.send(buffer);
+    return res.status(200).json({
+      success: true,
+      data: {
+        downloadUrl: data.signedUrl,
+        fileName: shareLink.original_name,
+      },
+    });
   },
 );

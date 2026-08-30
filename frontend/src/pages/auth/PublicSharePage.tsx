@@ -201,71 +201,61 @@ const PublicSharePage = () => {
   // Download file
   // ==========================================
 
-  const handleDownload = async () => {
-    try {
-      setMessage("");
-      setDownloading(true);
+ const handleDownload = async () => {
+  try {
+    setMessage("");
+    setDownloading(true);
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/share/${shareToken}/download`,
-        {
-          method: "GET",
-          credentials: "include",
-        },
-      );
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/share/${shareToken}/download`,
+      {
+        method: "GET",
+        credentials: "include",
+      },
+    );
 
-      const contentType = response.headers.get("content-type") || "";
+    const contentType =
+      response.headers.get("content-type") || "";
 
-      if (!response.ok) {
-        let errorMessage = "Unable to download the file.";
+    if (!response.ok) {
+      let errorMessage = "Unable to download the file.";
 
-        if (contentType.includes("application/json")) {
-          const data = await response.json();
-
-          errorMessage = data?.message || "Unable to download the file.";
-        } else {
-          errorMessage =
-            "Unable to download the file. The share link may have expired or reached its download limit.";
-        }
-
-        setMessage(errorMessage);
-        return;
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        errorMessage =
+          data?.message || errorMessage;
       }
 
-      if (
-        contentType.includes("application/json") ||
-        contentType.includes("text/html")
-      ) {
-        setMessage("Unable to download the file. Please try again.");
-        return;
-      }
-
-      const blob = await response.blob();
-
-      const downloadUrl = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-
-      link.href = downloadUrl;
-      link.download = file?.originalName || "download";
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
-
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Download error:", error);
-
-      setMessage(
-        error instanceof Error ? error.message : "Unable to download the file.",
-      );
-    } finally {
-      setDownloading(false);
+      throw new Error(errorMessage);
     }
-  };
+
+    const data = await response.json();
+
+    if (!data?.data?.downloadUrl) {
+      throw new Error(
+        "Download URL was not returned by the server.",
+      );
+    }
+
+    // IMPORTANT:
+    // Do NOT fetch the Supabase URL.
+    // Do NOT use response.blob().
+    // Send the browser directly to the signed URL.
+
+    window.location.assign(data.data.downloadUrl);
+
+  } catch (error) {
+    console.error("Download error:", error);
+
+    setMessage(
+      error instanceof Error
+        ? error.message
+        : "Unable to download the file.",
+    );
+
+    setDownloading(false);
+  }
+};
   // ==========================================
   // Helper functions
   // ==========================================

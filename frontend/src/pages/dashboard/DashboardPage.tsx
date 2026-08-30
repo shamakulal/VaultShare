@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../../config/supabase";
+import Toast from "../../components/Toast";
+import ShareFileModal from "../../components/ShareFileModal";
 interface FileItem {
   id: number;
   original_name: string;
@@ -18,6 +21,9 @@ const DashboardPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+ 
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [sharePassword, setSharePassword] = useState("");
@@ -34,6 +40,14 @@ const DashboardPage = () => {
   // ==========================================
   // Load user's files
   // ==========================================
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setMessage(text);
+    setToastType(type);
+
+    setTimeout(() => {
+      setMessage("");
+    }, 3500);
+  };
 
   const fetchFiles = async () => {
     try {
@@ -79,35 +93,95 @@ const DashboardPage = () => {
 
     try {
       setLoading(true);
+      setUploadProgress(0);
       setMessage("");
 
-      const formData = new FormData();
+      // ==========================================
+      // STEP 1: Ask backend for signed upload URL
+      // ==========================================
 
-      formData.append("file", selectedFile);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/files/upload`,
+      const urlResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/upload-url`,
         {
           method: "POST",
           credentials: "include",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: selectedFile.name,
+            mimeType: selectedFile.type,
+          }),
         },
       );
 
-      const data = await response.json();
+      const urlData = await urlResponse.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || "File upload failed");
+      if (!urlResponse.ok) {
+        throw new Error(urlData.message || "Failed to prepare upload");
       }
 
-      setMessage("File uploaded successfully");
+      const { path: storageKey } = urlData.data;
+
+      // ==========================================
+      // STEP 2: Upload DIRECTLY to Supabase
+      // ==========================================
+
+      const { error: uploadError } = await supabase.storage
+        .from("vaultshare-files")
+        .upload(storageKey, selectedFile, {
+          contentType: selectedFile.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+
+        throw new Error(
+          uploadError.message || "Failed to upload file to storage",
+        );
+      }
+
+      // ==========================================
+      // STEP 3: Save metadata in MySQL
+      // ==========================================
+
+      const completeResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/upload-complete`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            originalName: selectedFile.name,
+            storageKey,
+            mimeType: selectedFile.type,
+            sizeBytes: selectedFile.size,
+          }),
+        },
+      );
+
+      const completeData = await completeResponse.json();
+
+      if (!completeResponse.ok) {
+        throw new Error(
+          completeData.message || "Failed to save file information",
+        );
+      }
+
+      // ==========================================
+      // SUCCESS
+      // ==========================================
 
       setSelectedFile(null);
 
-      // Refresh file list
+      showToast("File uploaded successfully!");
+
       await fetchFiles();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "File upload failed");
+      showToast(error instanceof Error ? error.message : "File upload failed");
     } finally {
       setLoading(false);
     }
@@ -186,7 +260,7 @@ const DashboardPage = () => {
 
       setCreatedShareUrl(publicUrl);
 
-      setMessage("Share link created successfully!");
+      showToast("Share link created successfully!");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to create share link",
@@ -199,9 +273,16 @@ const DashboardPage = () => {
     try {
       await navigator.clipboard.writeText(createdShareUrl);
 
-      setMessage("Share link copied to clipboard!");
+      showToast("Share link copied!");
     } catch {
-      setMessage("Failed to copy share link");
+      showToast("Failed to copy share link");
+    }
+  };
+  const handleSharePasswordChange = (value: string) => {
+    setSharePassword(value);
+
+    if (message.includes("password")) {
+      setMessage("");
     }
   };
 
@@ -212,16 +293,54 @@ const DashboardPage = () => {
   const handleDownload = async (fileId: number) => {
     try {
       setActionLoading(fileId);
+      setMessage("");
 
-      window.location.href = `${import.meta.env.VITE_API_URL}/files/${fileId}/download`;
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/${fileId}/download`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!response.ok) {
+        let errorMessage = "Failed to download file.";
+
+        if (contentType.includes("application/json")) {
+          const data = await response.json();
+          errorMessage = data?.message || errorMessage;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      if (!data?.data?.downloadUrl) {
+        throw new Error("Download URL was not returned by the server.");
+      }
+
+      // Direct browser download.
+      // Do NOT fetch the Supabase URL from JavaScript.
+      const link = document.createElement("a");
+      link.href = data.data.downloadUrl;
+      link.download = data.data.fileName || "download";
+      link.target = "_self";
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch (error) {
-      setMessage(
+      console.error("Download error:", error);
+
+      showToast(
         error instanceof Error ? error.message : "Failed to download file",
+        "error",
       );
     } finally {
-      setTimeout(() => {
-        setActionLoading(null);
-      }, 1000);
+      setActionLoading(null);
     }
   };
   const handleDeleteFile = async (fileId: number) => {
@@ -255,7 +374,7 @@ const DashboardPage = () => {
         previousFiles.filter((file) => file.id !== fileId),
       );
 
-      setMessage("File deleted successfully!");
+      showToast("File deleted successfully!");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Failed to delete file",
@@ -304,7 +423,7 @@ const DashboardPage = () => {
         ),
       );
 
-      setMessage(
+      showToast(
         `File is now ${newVisibility === "public" ? "public" : "private"}`,
       );
     } catch (error) {
@@ -385,6 +504,13 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-beige text-brown-dark">
+      <Toast message={message} type={toastType} />
+      {/* {toast && (
+        <div className="fixed right-5 top-5 z-[9999] animate-in rounded-xl bg-brown-dark px-5 py-3 text-sm font-semibold text-cream shadow-xl">
+          ✓ {toast}
+        </div>
+      )} */}
+
       {/* ================= HEADER ================= */}
       <header className="border-b border-brown-warm/20 bg-cream">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -522,13 +648,33 @@ const DashboardPage = () => {
                 />
               </label>
 
-              <button
-                onClick={handleUpload}
-                disabled={loading || !selectedFile}
-                className="mt-4 w-full rounded-xl bg-brown-primary px-5 py-3.5 text-sm font-bold text-cream transition hover:bg-brown-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? "Uploading your file..." : "Upload to Vault"}
-              </button>
+              {loading ? (
+                <div className="mt-4 w-full rounded-xl bg-beige-light p-3">
+                  <div className="flex items-center justify-between text-sm font-semibold text-brown-dark">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+
+                  <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-brown-primary/10">
+                    <div
+                      className="h-full rounded-full bg-brown-primary transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-center text-xs text-brown-warm">
+                    Please don't close this page while the file is uploading.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleUpload}
+                  disabled={!selectedFile}
+                  className="mt-4 w-full rounded-xl bg-brown-primary px-5 py-3.5 text-sm font-bold text-cream transition hover:bg-brown-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Upload to Vault
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -684,8 +830,8 @@ const DashboardPage = () => {
         {filteredFiles.length > 0 && (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredFiles.map((file) => {
-             // const isImage = file.mime_type.startsWith("image/");
-             // const isPdf = file.mime_type === "application/pdf";
+              // const isImage = file.mime_type.startsWith("image/");
+              // const isPdf = file.mime_type === "application/pdf";
               const fileType = getFileType(file.mime_type);
               return (
                 <article
@@ -784,192 +930,26 @@ const DashboardPage = () => {
       </main>
 
       {/* ================= SHARE MODAL ================= */}
-      {shareFile && (
-        <div className="fixed inset-0 z-50 flex items-end bg-brown-dark/60 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6">
-          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-cream p-5 shadow-2xl sm:max-w-lg sm:rounded-3xl sm:p-7">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">
-                  Share securely
-                </p>
+      {/* ================= SHARE MODAL ================= */}
 
-                <h2 className="mt-1 text-2xl font-bold text-brown-dark">
-                  Share this file
-                </h2>
-
-                <p
-                  className="mt-2 max-w-sm truncate text-sm text-brown-warm"
-                  title={shareFile.original_name}
-                >
-                  {shareFile.original_name}
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setShareFile(null);
-                  setCreatedShareUrl("");
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-beige text-lg font-bold text-brown-dark transition hover:bg-beige-light"
-              >
-                ×
-              </button>
-            </div>
-
-            {createdShareUrl ? (
-              <div>
-                <div className="rounded-2xl border border-gold/30 bg-beige p-4">
-                  <p className="font-bold text-brown-dark">
-                    Share link created successfully!
-                  </p>
-                  <p className="mt-1 text-sm text-brown-warm">
-                    Anyone with this link can access the shared file according
-                    to your settings.
-                  </p>
-                </div>
-
-                <label className="mt-5 block text-sm font-bold text-brown-dark">
-                  Your share link
-                </label>
-
-                <input
-                  type="text"
-                  value={createdShareUrl}
-                  readOnly
-                  className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-beige px-3 py-3 text-sm text-brown-dark outline-none"
-                />
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleCopyShareLink}
-                    className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
-                  >
-                    Copy Link
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShareFile(null);
-                      setCreatedShareUrl("");
-                    }}
-                    className="rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-brown-dark">
-                      Password{" "}
-                      {shareFile.visibility === "private" ? (
-                        <span className="font-normal text-red-600">
-                          (required for private files)
-                        </span>
-                      ) : (
-                        <span className="font-normal text-brown-primary/70">
-                          (optional)
-                        </span>
-                      )}
-                    </label>
-
-                    <input
-                      type="password"
-                      value={sharePassword}
-                      onChange={(event) => {
-                        setSharePassword(event.target.value);
-
-                        if (message.includes("password")) {
-                          setMessage("");
-                        }
-                      }}
-                      placeholder={
-                        shareFile.visibility === "private"
-                          ? "Enter a password to share this private file"
-                          : "Protect this link with a password"
-                      }
-                      required={shareFile.visibility === "private"}
-                      className={`mt-2 w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 ${
-                        shareFile.visibility === "private" &&
-                        !sharePassword.trim()
-                          ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                          : "border-brown-primary/15 focus:border-brown-primary focus:ring-brown-primary/10"
-                      }`}
-                    />
-
-                    {shareFile.visibility === "private" && (
-                      <p className="mt-2 text-xs text-brown-warm">
-                        This file is private. You must set a password before
-                        creating a share link.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-bold text-brown-dark">
-                      Expiry date
-                      <span className="ml-1 font-normal text-brown-warm">
-                        (optional)
-                      </span>
-                    </label>
-
-                    <input
-                      type="datetime-local"
-                      value={shareExpiry}
-                      onChange={(event) => setShareExpiry(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-bold text-brown-dark">
-                      Maximum downloads
-                      <span className="ml-1 font-normal text-brown-warm">
-                        (optional)
-                      </span>
-                    </label>
-
-                    <input
-                      type="number"
-                      min="1"
-                      value={maxDownloads}
-                      onChange={(event) => setMaxDownloads(event.target.value)}
-                      placeholder="For example: 5"
-                      className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-7 grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => {
-                      setShareFile(null);
-                      setCreatedShareUrl("");
-                    }}
-                    className="rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    onClick={handleCreateShareLink}
-                    disabled={
-                      loading ||
-                      (shareFile.visibility === "private" &&
-                        !sharePassword.trim())
-                    }
-                    className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? "Creating..." : "Create Link"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <ShareFileModal
+        shareFile={shareFile}
+        createdShareUrl={createdShareUrl}
+        sharePassword={sharePassword}
+        shareExpiry={shareExpiry}
+        maxDownloads={maxDownloads}
+        loading={loading}
+        message={message}
+        onClose={() => {
+          setShareFile(null);
+          setCreatedShareUrl("");
+        }}
+        onCopyShareLink={handleCopyShareLink}
+        onCreateShareLink={handleCreateShareLink}
+        onPasswordChange={handleSharePasswordChange}
+        onExpiryChange={setShareExpiry}
+        onMaxDownloadsChange={setMaxDownloads}
+      />
     </div>
   );
 };
