@@ -92,11 +92,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   // 4. Generate JWT
   const token = generateToken(user.id);
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   // 5. Store JWT in cookie
   res.cookie("token", token, {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     maxAge: 24 * 60 * 60 * 1000,
   });
 
@@ -115,11 +117,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
+  const isProduction = process.env.NODE_ENV === "production";
+
   res.clearCookie("token", {
-  httpOnly: true,
-  secure: true,
-  sameSite: "none",
-});
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+  });
 
   res.status(200).json({
     success: true,

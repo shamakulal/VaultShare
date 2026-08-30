@@ -20,7 +20,6 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://vaultshare10.netlify.app",
-      "https://vaultshare10.netlify.app/",
     ],
     credentials: true,
   }),
