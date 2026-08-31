@@ -1,41 +1,48 @@
+import React from "react";
+
 interface ShareFile {
+  id: number;
   original_name: string;
+  mime_type: string;
+  size_bytes: number;
   visibility: string;
+  created_at: string;
 }
 
 interface ShareFileModalProps {
   shareFile: ShareFile | null;
-  createdShareUrl: string;
   sharePassword: string;
+  setSharePassword: React.Dispatch<React.SetStateAction<string>>;
   shareExpiry: string;
+  setShareExpiry: React.Dispatch<React.SetStateAction<string>>;
   maxDownloads: string;
-  loading: boolean;
+  setMaxDownloads: React.Dispatch<React.SetStateAction<string>>;
+  createdShareUrl: string;
   message: string;
-
-  onClose: () => void;
-  onCopyShareLink: () => void;
-  onCreateShareLink: () => void;
-
-  onPasswordChange: (value: string) => void;
-  onExpiryChange: (value: string) => void;
-  onMaxDownloadsChange: (value: string) => void;
+  loading: boolean;
+  setShareFile: React.Dispatch<React.SetStateAction<ShareFile | null>>;
+  setCreatedShareUrl: React.Dispatch<React.SetStateAction<string>>;
+  handleCreateShareLink: () => Promise<void>;
+  handleCopyShareLink: () => Promise<void>;
 }
 
 const ShareFileModal = ({
   shareFile,
-  createdShareUrl,
   sharePassword,
+  setSharePassword,
   shareExpiry,
+  setShareExpiry,
   maxDownloads,
-  loading,
+  setMaxDownloads,
+  createdShareUrl,
   message,
-  onClose,
-  onCopyShareLink,
-  onCreateShareLink,
-  onPasswordChange,
-  onExpiryChange,
-  onMaxDownloadsChange,
+  loading,
+  setShareFile,
+  setCreatedShareUrl,
+  handleCreateShareLink,
+  handleCopyShareLink,
 }: ShareFileModalProps) => {
+  // Prevent rendering when no file is selected
   if (!shareFile) {
     return null;
   }
@@ -64,7 +71,10 @@ const ShareFileModal = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={() => {
+              setShareFile(null);
+              setCreatedShareUrl("");
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-beige text-lg font-bold text-brown-dark transition hover:bg-beige-light"
             aria-label="Close"
           >
@@ -72,8 +82,7 @@ const ShareFileModal = ({
           </button>
         </div>
 
-        {/* ================= SUCCESS ================= */}
-
+        {/* CREATED LINK */}
         {createdShareUrl ? (
           <div>
             <div className="rounded-2xl border border-gold/30 bg-beige p-4">
@@ -98,18 +107,16 @@ const ShareFileModal = ({
               className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-beige px-3 py-3 text-sm text-brown-dark outline-none"
             />
 
-            {/* BUTTONS */}
-            <div className="mt-5 grid grid-cols-3 gap-3">
-
+            <div className="mt-5 grid grid-cols-2 gap-3">
               {/* COPY */}
               <button
-                onClick={onCopyShareLink}
+                onClick={handleCopyShareLink}
                 className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
               >
                 Copy Link
               </button>
 
-              {/* OPEN NEW TAB */}
+              {/* OPEN */}
               <button
                 onClick={() => {
                   window.open(
@@ -118,16 +125,18 @@ const ShareFileModal = ({
                     "noopener,noreferrer",
                   );
                 }}
-                className="flex items-center justify-center gap-2 rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
+                className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
               >
-                <span className="text-cream">↗</span>
-                Open
+                ↗ Open
               </button>
 
               {/* DONE */}
               <button
-                onClick={onClose}
-                className="rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
+                onClick={() => {
+                  setShareFile(null);
+                  setCreatedShareUrl("");
+                }}
+                className="col-span-2 rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
               >
                 Done
               </button>
@@ -135,9 +144,8 @@ const ShareFileModal = ({
           </div>
         ) : (
           <>
-            {/* ================= CREATE SHARE LINK ================= */}
-
-            <div className="space-y-4">
+            {/* CREATE SHARE LINK */}
+            <div className="space-y-5">
 
               {/* PASSWORD */}
               <div>
@@ -157,16 +165,16 @@ const ShareFileModal = ({
                 <input
                   type="password"
                   value={sharePassword}
-                  onChange={(event) => {
-                    onPasswordChange(event.target.value);
-                  }}
+                  onChange={(event) =>
+                    setSharePassword(event.target.value)
+                  }
                   placeholder={
                     shareFile.visibility === "private"
                       ? "Enter a password to share this private file"
                       : "Protect this link with a password"
                   }
                   required={shareFile.visibility === "private"}
-                  className={`mt-2 w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 ${
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 ${
                     shareFile.visibility === "private" &&
                     !sharePassword.trim()
                       ? "border-red-300 focus:border-red-500 focus:ring-red-100"
@@ -182,43 +190,196 @@ const ShareFileModal = ({
                 )}
               </div>
 
-              {/* EXPIRY */}
+              {/* EXPIRATION */}
               <div>
-                <label className="text-sm font-bold text-brown-dark">
-                  Expiry date
+                <label className="mb-3 block text-sm font-bold text-brown-dark">
+                  Expiration
                   <span className="ml-1 font-normal text-brown-warm">
                     (optional)
                   </span>
                 </label>
 
-                <input
-                  type="datetime-local"
-                  value={shareExpiry}
-                  onChange={(event) =>
-                    onExpiryChange(event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
-                />
+                <div className="space-y-2">
+
+                  {/* NEVER */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
+                    <input
+                      type="radio"
+                      name="expiration"
+                      checked={shareExpiry === ""}
+                      onChange={() => setShareExpiry("")}
+                    />
+
+                    <span className="text-sm font-semibold text-brown-dark">
+                      Never expires
+                    </span>
+                  </label>
+
+                  {/* 1 HOUR */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
+                    <input
+                      type="radio"
+                      name="expiration"
+                      checked={shareExpiry === "1h"}
+                      onChange={() => {
+                        const date = new Date(
+                          Date.now() + 60 * 60 * 1000,
+                        );
+
+                        setShareExpiry(
+                          date.toISOString().slice(0, 16),
+                        );
+                      }}
+                    />
+
+                    <span className="text-sm font-semibold text-brown-dark">
+                      1 hour
+                    </span>
+                  </label>
+
+                  {/* 24 HOURS */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
+                    <input
+                      type="radio"
+                      name="expiration"
+                      checked={shareExpiry === "24h"}
+                      onChange={() => {
+                        const date = new Date(
+                          Date.now() + 24 * 60 * 60 * 1000,
+                        );
+
+                        setShareExpiry(
+                          date.toISOString().slice(0, 16),
+                        );
+                      }}
+                    />
+
+                    <span className="text-sm font-semibold text-brown-dark">
+                      24 hours
+                    </span>
+                  </label>
+
+                  {/* 7 DAYS */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
+                    <input
+                      type="radio"
+                      name="expiration"
+                      checked={shareExpiry === "7d"}
+                      onChange={() => {
+                        const date = new Date(
+                          Date.now() + 7 * 24 * 60 * 60 * 1000,
+                        );
+
+                        setShareExpiry(
+                          date.toISOString().slice(0, 16),
+                        );
+                      }}
+                    />
+
+                    <span className="text-sm font-semibold text-brown-dark">
+                      7 days
+                    </span>
+                  </label>
+
+                  {/* CUSTOM */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
+                    <input
+                      type="radio"
+                      name="expiration"
+                      checked={
+                        shareExpiry !== "" &&
+                        shareExpiry !== "1h" &&
+                        shareExpiry !== "24h" &&
+                        shareExpiry !== "7d"
+                      }
+                      onChange={() => {
+                        if (
+                          shareExpiry === "" ||
+                          shareExpiry === "1h" ||
+                          shareExpiry === "24h" ||
+                          shareExpiry === "7d"
+                        ) {
+                          const date = new Date(
+                            Date.now() + 24 * 60 * 60 * 1000,
+                          );
+
+                          setShareExpiry(
+                            date.toISOString().slice(0, 16),
+                          );
+                        }
+                      }}
+                    />
+
+                    <span className="text-sm font-semibold text-brown-dark">
+                      Custom date & time
+                    </span>
+                  </label>
+
+                  {/* CUSTOM DATE PICKER */}
+                  {shareExpiry !== "" &&
+                    shareExpiry !== "1h" &&
+                    shareExpiry !== "24h" &&
+                    shareExpiry !== "7d" && (
+                      <input
+                        type="datetime-local"
+                        value={shareExpiry}
+                        onChange={(event) =>
+                          setShareExpiry(event.target.value)
+                        }
+                        className="w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
+                      />
+                    )}
+                </div>
               </div>
 
               {/* MAX DOWNLOADS */}
               <div>
-                <label className="text-sm font-bold text-brown-dark">
+                <label className="mb-2 block text-sm font-bold text-brown-dark">
                   Maximum downloads
                   <span className="ml-1 font-normal text-brown-warm">
                     (optional)
                   </span>
                 </label>
 
+                <div className="grid grid-cols-4 gap-2">
+
+                  {["1", "5", "10"].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setMaxDownloads(value)}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                        maxDownloads === value
+                          ? "border-brown-primary bg-brown-primary text-cream"
+                          : "border-brown-primary/15 bg-white text-brown-dark hover:bg-beige"
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setMaxDownloads("")}
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                      maxDownloads === ""
+                        ? "border-brown-primary bg-brown-primary text-cream"
+                        : "border-brown-primary/15 bg-white text-brown-dark hover:bg-beige"
+                    }`}
+                  >
+                    ∞
+                  </button>
+                </div>
+
                 <input
                   type="number"
                   min="1"
                   value={maxDownloads}
                   onChange={(event) =>
-                    onMaxDownloadsChange(event.target.value)
+                    setMaxDownloads(event.target.value)
                   }
-                  placeholder="For example: 5"
-                  className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
+                  placeholder="Custom limit"
+                  className="mt-3 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
                 />
               </div>
             </div>
@@ -230,18 +391,21 @@ const ShareFileModal = ({
               </div>
             )}
 
-            {/* ACTION BUTTONS */}
+            {/* BUTTONS */}
             <div className="mt-7 grid grid-cols-2 gap-3">
 
               <button
-                onClick={onClose}
+                onClick={() => {
+                  setShareFile(null);
+                  setCreatedShareUrl("");
+                }}
                 className="rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
               >
                 Cancel
               </button>
 
               <button
-                onClick={onCreateShareLink}
+                onClick={handleCreateShareLink}
                 disabled={
                   loading ||
                   (shareFile.visibility === "private" &&
