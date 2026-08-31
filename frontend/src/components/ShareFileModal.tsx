@@ -1,4 +1,5 @@
 import React from "react";
+import ShareLinkStatus from "./ShareLinkStatus";
 
 interface ShareFile {
   id: number;
@@ -114,6 +115,14 @@ const ShareFileModal = ({
                 Anyone with this link can access the shared file according to
                 your settings.
               </p>
+
+              <div className="mt-4 border-t border-brown-primary/10 pt-4">
+                <ShareLinkStatus
+                  expiresAt={shareExpiry || null}
+                  downloadCount={0}
+                  maxDownloads={maxDownloads ? Number(maxDownloads) : null}
+                />
+              </div>
             </div>
 
             <label className="mt-5 block text-sm font-bold text-brown-dark">
@@ -273,7 +282,7 @@ const ShareFileModal = ({
                       if (!isCustomExpiry) {
                         const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-                        onExpiryChange(date.toISOString().slice(0, 16));
+                       onExpiryChange(formatLocalDateTime(date));
                       }
                     }}
                   />
