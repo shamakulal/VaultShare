@@ -6,6 +6,7 @@ import Toast from "../../components/Toast";
 import ShareFileModal from "../../components/ShareFileModal";
 import QRCodeModal from "../../components/QRCodeModal";
 import DownloadAnalyticsModal from "../../components/DownloadAnalyticsModal";
+
 interface FileItem {
   id: number;
   original_name: string;
@@ -133,20 +134,22 @@ const DashboardPage = () => {
       // STEP 2: Upload DIRECTLY to Supabase
       // ==========================================
 
-      const { error: uploadError } = await supabase.storage
-        .from("vaultshare-files")
-        .upload(storageKey, selectedFile, {
-          contentType: selectedFile.type,
-          upsert: false,
-        });
+     const { error: uploadError } = await supabase.storage
+  .from("vaultshare-files")
+  .upload(storageKey, selectedFile, {
+    contentType: selectedFile.type,
+    upsert: false,
+  });
 
-      if (uploadError) {
-        console.error("Supabase upload error:", uploadError);
+if (uploadError) {
+  console.error("Supabase upload error:", uploadError);
 
-        throw new Error(
-          uploadError.message || "Failed to upload file to storage",
-        );
-      }
+  throw new Error(
+    uploadError.message || "Failed to upload file to storage",
+  );
+}
+
+setUploadProgress(100);
 
       // ==========================================
       // STEP 3: Save metadata in MySQL
