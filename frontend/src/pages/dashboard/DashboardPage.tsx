@@ -35,10 +35,11 @@ const DashboardPage = () => {
   const [showQRCode, setShowQRCode] = useState(false);
   const [showDownloadAnalytics, setShowDownloadAnalytics] = useState(false);
   const [analyticsFile, setAnalyticsFile] = useState<FileItem | null>(null);
-const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
+  const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [downloadLoading, setDownloadLoading] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
   const [visibilityLoading, setVisibilityLoading] = useState<number | null>(
     null,
   );
@@ -203,7 +204,6 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
     setMaxDownloads("");
     setCreatedShareUrl("");
   };
-  
 
   const handleCreateShareLink = async () => {
     if (!shareFile) return;
@@ -300,7 +300,7 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
   };
   const handleDownload = async (fileId: number) => {
     try {
-      setActionLoading(fileId);
+      setDownloadLoading(fileId);
       setMessage("");
 
       const response = await fetch(
@@ -348,7 +348,7 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
         "error",
       );
     } finally {
-      setActionLoading(null);
+      setDownloadLoading(null);
     }
   };
   const handleDeleteFile = async (fileId: number) => {
@@ -361,7 +361,7 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
     }
 
     try {
-      setActionLoading(fileId);
+      setDeleteLoading(fileId);
       setMessage("");
 
       const response = await fetch(
@@ -388,7 +388,7 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
         error instanceof Error ? error.message : "Failed to delete file",
       );
     } finally {
-      setActionLoading(null);
+      setDeleteLoading(null);
     }
   };
   const handleVisibilityChange = async (
@@ -921,39 +921,48 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
 
                     {/* ACTIONS */}
                     <div className="mt-5 grid grid-cols-3 gap-2">
+                      {/* DOWNLOAD */}
                       <button
+                        type="button"
                         onClick={() => handleDownload(file.id)}
-                        disabled={actionLoading === file.id}
+                        disabled={downloadLoading === file.id}
                         className="rounded-lg bg-beige px-2 py-2.5 text-xs font-bold text-brown-dark transition hover:bg-beige-light disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {actionLoading === file.id ? "Loading..." : "Download"}
+                        {downloadLoading === file.id
+                          ? "Downloading..."
+                          : "Download"}
                       </button>
 
+                      {/* SHARE */}
                       <button
+                        type="button"
                         onClick={() => handleShare(file)}
                         className="rounded-lg bg-gold px-2 py-2.5 text-xs font-bold text-brown-dark transition hover:brightness-95"
                       >
                         Share
                       </button>
 
+                      {/* ANALYTICS */}
                       <button
                         type="button"
                         onClick={() => {
-  setAnalyticsFile(file);
-  setAnalyticsDownloadCount(0);
-  setShowDownloadAnalytics(true);
-}}
+                          setAnalyticsFile(file);
+                          setAnalyticsDownloadCount(0);
+                          setShowDownloadAnalytics(true);
+                        }}
                         className="rounded-xl border border-brown-primary/20 bg-cream px-3 py-2 text-sm font-semibold text-brown-dark transition hover:bg-beige"
                       >
-                         Analytics
+                        Analytics
                       </button>
 
+                      {/* DELETE */}
                       <button
+                        type="button"
                         onClick={() => handleDeleteFile(file.id)}
-                        disabled={actionLoading === file.id}
-                        className="rounded-lg border border-red-200 bg-red-50 px-2 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={deleteLoading === file.id}
+                        className="col-span-3 rounded-lg border border-red-200 bg-red-50 px-2 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {actionLoading === file.id ? "Deleting..." : "Delete"}
+                        {deleteLoading === file.id ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   </div>
@@ -991,16 +1000,15 @@ const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
           shareUrl={createdShareUrl}
           onClose={() => setShowQRCode(false)}
         />
-
       )}
       {showDownloadAnalytics && analyticsFile && (
-  <DownloadAnalyticsModal
-  fileName={analyticsFile.original_name}
-  downloadCount={analyticsDownloadCount}
-  createdAt={analyticsFile.created_at}
-  onClose={() => setAnalyticsFile(null)}
-/>
-)}
+        <DownloadAnalyticsModal
+          fileName={analyticsFile.original_name}
+          downloadCount={analyticsDownloadCount}
+          createdAt={analyticsFile.created_at}
+          onClose={() => setAnalyticsFile(null)}
+        />
+      )}
     </div>
   );
 };
