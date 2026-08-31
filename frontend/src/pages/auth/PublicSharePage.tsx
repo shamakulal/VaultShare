@@ -203,56 +203,55 @@ const PublicSharePage = () => {
 
  const handleDownload = async () => {
   try {
-    setMessage("");
     setDownloading(true);
+    setMessage("");
 
     const response = await fetch(
       `${import.meta.env.VITE_API_URL}/share/${shareToken}/download`,
       {
         method: "GET",
         credentials: "include",
-      },
+      }
     );
 
-    const contentType =
-      response.headers.get("content-type") || "";
+    const contentType = response.headers.get("content-type") || "";
 
     if (!response.ok) {
       let errorMessage = "Unable to download the file.";
 
       if (contentType.includes("application/json")) {
         const data = await response.json();
-        errorMessage =
-          data?.message || errorMessage;
+        errorMessage = data?.message || errorMessage;
+      } else {
+        // Backend returned HTML error page
+        if (response.status === 403) {
+          errorMessage = "This share link has expired.";
+        } else if (response.status === 401) {
+          errorMessage = "Access denied. Please verify the password.";
+        }
       }
 
-      throw new Error(errorMessage);
+      setMessage(errorMessage);
+      return;
     }
 
     const data = await response.json();
 
     if (!data?.data?.downloadUrl) {
-      throw new Error(
-        "Download URL was not returned by the server.",
-      );
+      setMessage("Unable to download the file.");
+      return;
     }
 
-    // IMPORTANT:
-    // Do NOT fetch the Supabase URL.
-    // Do NOT use response.blob().
-    // Send the browser directly to the signed URL.
-
-    window.location.assign(data.data.downloadUrl);
-
+    window.location.href = data.data.downloadUrl;
   } catch (error) {
     console.error("Download error:", error);
 
     setMessage(
       error instanceof Error
         ? error.message
-        : "Unable to download the file.",
+        : "Unable to download the file."
     );
-
+  } finally {
     setDownloading(false);
   }
 };
