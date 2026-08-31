@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../config/supabase";
 import Toast from "../../components/Toast";
 import ShareFileModal from "../../components/ShareFileModal";
+import QRCodeModal from "../../components/QRCodeModal";
+
 interface FileItem {
   id: number;
   original_name: string;
@@ -30,6 +32,7 @@ const DashboardPage = () => {
   const [shareExpiry, setShareExpiry] = useState("");
   const [maxDownloads, setMaxDownloads] = useState("");
   const [createdShareUrl, setCreatedShareUrl] = useState("");
+  const [showQRCode, setShowQRCode] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
@@ -967,6 +970,12 @@ const DashboardPage = () => {
         onExpiryChange={setShareExpiry}
         onMaxDownloadsChange={setMaxDownloads}
       />
+      {showQRCode && createdShareUrl && (
+        <QRCodeModal
+          shareUrl={createdShareUrl}
+          onClose={() => setShowQRCode(false)}
+        />
+      )}
     </div>
   );
 };

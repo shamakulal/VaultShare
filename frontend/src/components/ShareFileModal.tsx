@@ -144,7 +144,15 @@ const ShareFileModal = ({
               >
                 Copy Link
               </button>
-
+              {createdShareUrl && (
+                <button
+                  type="button"
+                 // onClick={() => setShowQRCode(true)}
+                  className="rounded-xl border border-brown-primary/15 bg-cream px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige"
+                >
+                  QR Code
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -282,7 +290,7 @@ const ShareFileModal = ({
                       if (!isCustomExpiry) {
                         const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-                       onExpiryChange(formatLocalDateTime(date));
+                        onExpiryChange(formatLocalDateTime(date));
                       }
                     }}
                   />
