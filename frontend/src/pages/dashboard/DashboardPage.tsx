@@ -5,7 +5,7 @@ import { supabase } from "../../config/supabase";
 import Toast from "../../components/Toast";
 import ShareFileModal from "../../components/ShareFileModal";
 import QRCodeModal from "../../components/QRCodeModal";
-
+import DownloadAnalyticsModal from "../../components/DownloadAnalyticsModal";
 interface FileItem {
   id: number;
   original_name: string;
@@ -33,7 +33,9 @@ const DashboardPage = () => {
   const [maxDownloads, setMaxDownloads] = useState("");
   const [createdShareUrl, setCreatedShareUrl] = useState("");
   const [showQRCode, setShowQRCode] = useState(false);
-
+  const [showDownloadAnalytics, setShowDownloadAnalytics] = useState(false);
+  const [analyticsFile, setAnalyticsFile] = useState<FileItem | null>(null);
+const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -201,6 +203,7 @@ const DashboardPage = () => {
     setMaxDownloads("");
     setCreatedShareUrl("");
   };
+  
 
   const handleCreateShareLink = async () => {
     if (!shareFile) return;
@@ -934,6 +937,18 @@ const DashboardPage = () => {
                       </button>
 
                       <button
+                        type="button"
+                        onClick={() => {
+  setAnalyticsFile(file);
+  setAnalyticsDownloadCount(0);
+  setShowDownloadAnalytics(true);
+}}
+                        className="rounded-xl border border-brown-primary/20 bg-cream px-3 py-2 text-sm font-semibold text-brown-dark transition hover:bg-beige"
+                      >
+                         Analytics
+                      </button>
+
+                      <button
                         onClick={() => handleDeleteFile(file.id)}
                         disabled={actionLoading === file.id}
                         className="rounded-lg border border-red-200 bg-red-50 px-2 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -969,14 +984,23 @@ const DashboardPage = () => {
         onPasswordChange={handleSharePasswordChange}
         onExpiryChange={setShareExpiry}
         onMaxDownloadsChange={setMaxDownloads}
-onOpenQRCode={() => setShowQRCode(true)}
-/>
+        onOpenQRCode={() => setShowQRCode(true)}
+      />
       {showQRCode && createdShareUrl && (
         <QRCodeModal
           shareUrl={createdShareUrl}
           onClose={() => setShowQRCode(false)}
         />
+
       )}
+      {showDownloadAnalytics && analyticsFile && (
+  <DownloadAnalyticsModal
+  fileName={analyticsFile.original_name}
+  downloadCount={analyticsDownloadCount}
+  createdAt={analyticsFile.created_at}
+  onClose={() => setAnalyticsFile(null)}
+/>
+)}
     </div>
   );
 };
