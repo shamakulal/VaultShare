@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../config/supabase";
 import Toast from "../../components/Toast";
 import ShareFileModal from "../../components/ShareFileModal";
+import QRCodeModal from "../../components/QRCodeModal";
+import DownloadAnalyticsModal from "../../components/DownloadAnalyticsModal";
+
 interface FileItem {
   id: number;
   original_name: string;
@@ -30,10 +33,14 @@ const DashboardPage = () => {
   const [shareExpiry, setShareExpiry] = useState("");
   const [maxDownloads, setMaxDownloads] = useState("");
   const [createdShareUrl, setCreatedShareUrl] = useState("");
-
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [showDownloadAnalytics, setShowDownloadAnalytics] = useState(false);
+  const [analyticsFile, setAnalyticsFile] = useState<FileItem | null>(null);
+  const [analyticsDownloadCount, setAnalyticsDownloadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [downloadLoading, setDownloadLoading] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
   const [visibilityLoading, setVisibilityLoading] = useState<number | null>(
     null,
   );
@@ -127,20 +134,22 @@ const DashboardPage = () => {
       // STEP 2: Upload DIRECTLY to Supabase
       // ==========================================
 
-      const { error: uploadError } = await supabase.storage
-        .from("vaultshare-files")
-        .upload(storageKey, selectedFile, {
-          contentType: selectedFile.type,
-          upsert: false,
-        });
+     const { error: uploadError } = await supabase.storage
+  .from("vaultshare-files")
+  .upload(storageKey, selectedFile, {
+    contentType: selectedFile.type,
+    upsert: false,
+  });
 
-      if (uploadError) {
-        console.error("Supabase upload error:", uploadError);
+if (uploadError) {
+  console.error("Supabase upload error:", uploadError);
 
-        throw new Error(
-          uploadError.message || "Failed to upload file to storage",
-        );
-      }
+  throw new Error(
+    uploadError.message || "Failed to upload file to storage",
+  );
+}
+
+setUploadProgress(100);
 
       // ==========================================
       // STEP 3: Save metadata in MySQL
@@ -294,7 +303,7 @@ const DashboardPage = () => {
   };
   const handleDownload = async (fileId: number) => {
     try {
-      setActionLoading(fileId);
+      setDownloadLoading(fileId);
       setMessage("");
 
       const response = await fetch(
@@ -326,14 +335,26 @@ const DashboardPage = () => {
 
       // Direct browser download.
       // Do NOT fetch the Supabase URL from JavaScript.
+      // Download using the original uploaded filename
+      const downloadResponse = await fetch(data.data.downloadUrl);
+
+      if (!downloadResponse.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      const blob = await downloadResponse.blob();
+
+      const blobUrl = window.URL.createObjectURL(blob);
+
       const link = document.createElement("a");
-      link.href = data.data.downloadUrl;
+      link.href = blobUrl;
       link.download = data.data.fileName || "download";
-      link.target = "_self";
 
       document.body.appendChild(link);
       link.click();
       link.remove();
+
+      window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Download error:", error);
 
@@ -342,7 +363,7 @@ const DashboardPage = () => {
         "error",
       );
     } finally {
-      setActionLoading(null);
+      setDownloadLoading(null);
     }
   };
   const handleDeleteFile = async (fileId: number) => {
@@ -355,7 +376,7 @@ const DashboardPage = () => {
     }
 
     try {
-      setActionLoading(fileId);
+      setDeleteLoading(fileId);
       setMessage("");
 
       const response = await fetch(
@@ -382,7 +403,44 @@ const DashboardPage = () => {
         error instanceof Error ? error.message : "Failed to delete file",
       );
     } finally {
-      setActionLoading(null);
+      setDeleteLoading(null);
+    }
+  };
+  const handleOpenDownloadAnalytics = async (file: FileItem) => {
+    try {
+      setAnalyticsFile(file);
+      setShowDownloadAnalytics(true);
+      setAnalyticsDownloadCount(0);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/${file.id}/analytics`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error(text || "Failed to load analytics");
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load analytics");
+      }
+
+      setAnalyticsDownloadCount(Number(data.data?.downloadCount || 0));
+    } catch (error) {
+      console.error("Analytics error:", error);
+
+      showToast(
+        error instanceof Error ? error.message : "Failed to load analytics",
+        "error",
+      );
     }
   };
   const handleVisibilityChange = async (
@@ -730,19 +788,32 @@ const DashboardPage = () => {
         </section>
 
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          {/* Search */}
+          {/* ================= SMART SEARCH ================= */}
           <div className="relative w-full md:max-w-md">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brown-warm">
+            {/* Search icon */}
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-brown-warm">
               🔍
             </span>
 
             <input
               type="text"
-              placeholder="Search your files..."
+              placeholder="Search files by name..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="w-full rounded-xl border border-brown-primary/15 bg-cream py-3 pl-11 pr-4 text-sm text-brown-dark outline-none transition placeholder:text-brown-warm/60 focus:border-brown-primary focus:ring-4 focus:ring-brown-primary/10"
+              className="w-full rounded-xl border border-brown-primary/15 bg-cream py-3 pl-11 pr-11 text-sm text-brown-dark outline-none transition placeholder:text-brown-warm/60 focus:border-brown-primary focus:ring-4 focus:ring-brown-primary/10"
             />
+
+            {/* Clear search */}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-sm font-bold text-brown-warm transition hover:bg-beige hover:text-brown-dark"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
 
           {/* Filter */}
@@ -814,7 +885,9 @@ const DashboardPage = () => {
             </h3>
 
             <p className="mt-2 text-sm text-brown-warm">
-              Try changing your search or filter.
+              {searchQuery
+                ? `No files match "${searchQuery}".`
+                : "Try changing your search or filter."}
             </p>
 
             <button
@@ -900,27 +973,44 @@ const DashboardPage = () => {
 
                     {/* ACTIONS */}
                     <div className="mt-5 grid grid-cols-3 gap-2">
+                      {/* DOWNLOAD */}
                       <button
+                        type="button"
                         onClick={() => handleDownload(file.id)}
-                        disabled={actionLoading === file.id}
+                        disabled={downloadLoading === file.id}
                         className="rounded-lg bg-beige px-2 py-2.5 text-xs font-bold text-brown-dark transition hover:bg-beige-light disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {actionLoading === file.id ? "Loading..." : "Download"}
+                        {downloadLoading === file.id
+                          ? "Downloading..."
+                          : "Download"}
                       </button>
 
+                      {/* SHARE */}
                       <button
+                        type="button"
                         onClick={() => handleShare(file)}
                         className="rounded-lg bg-gold px-2 py-2.5 text-xs font-bold text-brown-dark transition hover:brightness-95"
                       >
                         Share
                       </button>
 
+                      {/* ANALYTICS */}
                       <button
-                        onClick={() => handleDeleteFile(file.id)}
-                        disabled={actionLoading === file.id}
-                        className="rounded-lg border border-red-200 bg-red-50 px-2 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        onClick={() => handleOpenDownloadAnalytics(file)}
+                        className="rounded-xl border border-brown-primary/20 bg-cream px-3 py-2 text-sm font-semibold text-brown-dark transition hover:bg-beige"
                       >
-                        {actionLoading === file.id ? "Deleting..." : "Delete"}
+                        Analytics
+                      </button>
+
+                      {/* DELETE */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFile(file.id)}
+                        disabled={deleteLoading === file.id}
+                        className="col-span-3 rounded-lg border border-red-200 bg-red-50 px-2 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deleteLoading === file.id ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   </div>
@@ -951,7 +1041,22 @@ const DashboardPage = () => {
         onPasswordChange={handleSharePasswordChange}
         onExpiryChange={setShareExpiry}
         onMaxDownloadsChange={setMaxDownloads}
+        onOpenQRCode={() => setShowQRCode(true)}
       />
+      {showQRCode && createdShareUrl && (
+        <QRCodeModal
+          shareUrl={createdShareUrl}
+          onClose={() => setShowQRCode(false)}
+        />
+      )}
+      {showDownloadAnalytics && analyticsFile && (
+        <DownloadAnalyticsModal
+          fileName={analyticsFile.original_name}
+          downloadCount={analyticsDownloadCount}
+          createdAt={analyticsFile.created_at}
+          onClose={() => setAnalyticsFile(null)}
+        />
+      )}
     </div>
   );
 };
