@@ -9,6 +9,7 @@ import {
   downloadFile,
   updateFileVisibility,
   createShareLink,
+  getFileDownloadAnalytics,
   deleteFile,
 } from "../controllers/fileController";
 
@@ -93,7 +94,11 @@ router.post(
   protect,
   createShareLink
 );
-
+router.get(
+  "/:fileId/analytics",
+  protect,
+  getFileDownloadAnalytics,
+);
 router.delete(
   "/:fileId",
   protect,

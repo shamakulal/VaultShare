@@ -127,10 +127,7 @@ export const createUploadUrl = asyncHandler(
     if (error || !data) {
       console.error("Create signed upload URL error:", error);
 
-      throw new AppError(
-        "Failed to create upload URL",
-        500
-      );
+      throw new AppError("Failed to create upload URL", 500);
     }
 
     res.status(200).json({
@@ -140,7 +137,7 @@ export const createUploadUrl = asyncHandler(
         token: data.token,
       },
     });
-  }
+  },
 );
 
 export const completeUpload = asyncHandler(
@@ -149,23 +146,10 @@ export const completeUpload = asyncHandler(
       throw new AppError("Authentication required", 401);
     }
 
-    const {
-      originalName,
-      storageKey,
-      mimeType,
-      sizeBytes,
-    } = req.body;
+    const { originalName, storageKey, mimeType, sizeBytes } = req.body;
 
-    if (
-      !originalName ||
-      !storageKey ||
-      !mimeType ||
-      !sizeBytes
-    ) {
-      throw new AppError(
-        "Missing upload metadata",
-        400
-      );
+    if (!originalName || !storageKey || !mimeType || !sizeBytes) {
+      throw new AppError("Missing upload metadata", 400);
     }
 
     // Security check:
@@ -173,10 +157,7 @@ export const completeUpload = asyncHandler(
     const expectedPrefix = `users/${req.user.id}/`;
 
     if (!storageKey.startsWith(expectedPrefix)) {
-      throw new AppError(
-        "Invalid storage path",
-        403
-      );
+      throw new AppError("Invalid storage path", 403);
     }
 
     const [result] = await pool.execute(
@@ -191,19 +172,12 @@ export const completeUpload = asyncHandler(
       )
       VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [
-        req.user.id,
-        originalName,
-        storageKey,
-        mimeType,
-        sizeBytes,
-        "private",
-      ]
+      [req.user.id, originalName, storageKey, mimeType, sizeBytes, "private"],
     );
 
     const fileId = (result as any).insertId;
-await pool.execute(
-  `
+    await pool.execute(
+      `
   INSERT INTO file_activities (
     file_id,
     user_id,
@@ -211,12 +185,8 @@ await pool.execute(
   )
   VALUES (?, ?, ?)
   `,
-  [
-    fileId,
-    req.user.id,
-    "UPLOAD",
-  ]
-);
+      [fileId, req.user.id, "UPLOAD"],
+    );
     res.status(201).json({
       success: true,
       message: "File uploaded successfully",
@@ -232,13 +202,8 @@ await pool.execute(
         },
       },
     });
-  }
+  },
 );
-
-
-
-
-
 
 export const getMyFiles = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -310,10 +275,7 @@ export const downloadFile = asyncHandler(
     const files = rows as any[];
 
     if (files.length === 0) {
-      throw new AppError(
-        "File not found or you do not have permission",
-        404,
-      );
+      throw new AppError("File not found or you do not have permission", 404);
     }
 
     const file = files[0];
@@ -321,28 +283,22 @@ export const downloadFile = asyncHandler(
     // Generate temporary signed URL
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET!)
-      .createSignedUrl(
-        file.storage_key,
-        60,
-        {
-          download: true,
-        },
-      );
+      .createSignedUrl(file.storage_key, 60, {
+        download: true,
+      });
 
     if (error || !data?.signedUrl) {
       console.error("Supabase signed URL error:", error);
 
-      throw new AppError(
-        "Failed to create download URL",
-        500,
-      );
+      throw new AppError("Failed to create download URL", 500);
     }
 
     // Return URL to frontend
     // Increment download count for this file's share links
-// Record download activity
-await pool.execute(
-  `
+    // Record download activity
+    // Record download activity
+    await pool.execute(
+      `
   INSERT INTO file_activities (
     file_id,
     user_id,
@@ -350,25 +306,19 @@ await pool.execute(
   )
   VALUES (?, ?, ?)
   `,
-  [
-    fileId,
-    req.user.id,
-    "DOWNLOAD",
-  ],
-);
+      [fileId, req.user.id, "DOWNLOAD"],
+    );
 
-// Return URL to frontend
-return res.status(200).json({
-  success: true,
-  data: {
-    downloadUrl: data.signedUrl,
-    fileName: file.original_name,
+    // Return URL to frontend
+    return res.status(200).json({
+      success: true,
+      data: {
+        downloadUrl: data.signedUrl,
+        fileName: file.original_name,
+      },
+    });
   },
-});
-
-  }
-)
-
+);
 
 export const updateFileVisibility = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -587,6 +537,57 @@ export const deleteFile = asyncHandler(
     return res.status(200).json({
       success: true,
       message: "File deleted successfully",
+    });
+  },
+);
+export const getFileDownloadAnalytics = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const fileId = Number(req.params.fileId);
+
+    if (!Number.isInteger(fileId) || fileId <= 0) {
+      throw new AppError("Invalid file ID", 400);
+    }
+
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const [files] = await pool.execute(
+      `
+      SELECT id, original_name, created_at
+      FROM files
+      WHERE id = ?
+      AND user_id = ?
+      LIMIT 1
+      `,
+      [fileId, req.user.id],
+    );
+
+    const fileList = files as any[];
+
+    if (fileList.length === 0) {
+      throw new AppError("File not found", 404);
+    }
+
+    const [rows] = await pool.execute(
+      `
+      SELECT COUNT(*) AS downloadCount
+      FROM file_activities
+      WHERE file_id = ?
+      AND action = 'DOWNLOAD'
+      `,
+      [fileId],
+    );
+
+    const analytics = rows as any[];
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        fileName: fileList[0].original_name,
+        downloadCount: Number(analytics[0]?.downloadCount || 0),
+        createdAt: fileList[0].created_at,
+      },
     });
   },
 );

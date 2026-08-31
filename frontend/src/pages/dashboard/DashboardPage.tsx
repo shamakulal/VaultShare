@@ -391,6 +391,47 @@ const DashboardPage = () => {
       setDeleteLoading(null);
     }
   };
+  const handleOpenDownloadAnalytics = async (file: FileItem) => {
+  try {
+    setAnalyticsFile(file);
+    setShowDownloadAnalytics(true);
+    setAnalyticsDownloadCount(0);
+
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/files/${file.id}/analytics`,
+      {
+        method: "GET",
+        credentials: "include",
+      },
+    );
+
+    const contentType = response.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error(text || "Failed to load analytics");
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to load analytics");
+    }
+
+    setAnalyticsDownloadCount(
+      Number(data.data?.downloadCount || 0),
+    );
+  } catch (error) {
+    console.error("Analytics error:", error);
+
+    showToast(
+      error instanceof Error
+        ? error.message
+        : "Failed to load analytics",
+      "error",
+    );
+  }
+};
   const handleVisibilityChange = async (
     fileId: number,
     newVisibility: "private" | "public",
@@ -945,11 +986,7 @@ const DashboardPage = () => {
                       {/* ANALYTICS */}
                       <button
                         type="button"
-                        onClick={() => {
-                          setAnalyticsFile(file);
-                          setAnalyticsDownloadCount(0);
-                          setShowDownloadAnalytics(true);
-                        }}
+                       onClick={() => handleOpenDownloadAnalytics(file)}
                         className="rounded-xl border border-brown-primary/20 bg-cream px-3 py-2 text-sm font-semibold text-brown-dark transition hover:bg-beige"
                       >
                         Analytics
