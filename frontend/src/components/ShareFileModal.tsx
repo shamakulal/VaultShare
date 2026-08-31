@@ -46,25 +46,33 @@ const ShareFileModal = ({
   }
 
   const isCustomExpiry =
-    shareExpiry !== "" &&
-    !["1h", "24h", "7d"].includes(shareExpiry);
+    shareExpiry !== "" && !["1h", "24h", "7d"].includes(shareExpiry);
+
+  const formatLocalDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
 
   const setExpiryHours = (hours: number) => {
     const date = new Date(Date.now() + hours * 60 * 60 * 1000);
 
-    onExpiryChange(date.toISOString().slice(0, 16));
+    onExpiryChange(formatLocalDateTime(date));
   };
 
   const setExpiryDays = (days: number) => {
     const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-    onExpiryChange(date.toISOString().slice(0, 16));
+    onExpiryChange(formatLocalDateTime(date));
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-brown-dark/60 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6">
       <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-cream p-5 shadow-2xl sm:max-w-lg sm:rounded-3xl sm:p-7">
-
         {/* HEADER */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -131,11 +139,7 @@ const ShareFileModal = ({
               <button
                 type="button"
                 onClick={() => {
-                  window.open(
-                    createdShareUrl,
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
+                  window.open(createdShareUrl, "_blank", "noopener,noreferrer");
                 }}
                 className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
               >
@@ -171,9 +175,7 @@ const ShareFileModal = ({
               <input
                 type="password"
                 value={sharePassword}
-                onChange={(event) =>
-                  onPasswordChange(event.target.value)
-                }
+                onChange={(event) => onPasswordChange(event.target.value)}
                 placeholder={
                   shareFile.visibility === "private"
                     ? "Enter a password to share this private file"
@@ -181,8 +183,7 @@ const ShareFileModal = ({
                 }
                 required={shareFile.visibility === "private"}
                 className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 ${
-                  shareFile.visibility === "private" &&
-                  !sharePassword.trim()
+                  shareFile.visibility === "private" && !sharePassword.trim()
                     ? "border-red-300 focus:border-red-500 focus:ring-red-100"
                     : "border-brown-primary/15 focus:border-brown-primary focus:ring-brown-primary/10"
                 }`}
@@ -190,8 +191,8 @@ const ShareFileModal = ({
 
               {shareFile.visibility === "private" && (
                 <p className="mt-2 text-xs text-brown-warm">
-                  This file is private. You must set a password before
-                  creating a share link.
+                  This file is private. You must set a password before creating
+                  a share link.
                 </p>
               )}
             </div>
@@ -206,7 +207,6 @@ const ShareFileModal = ({
               </label>
 
               <div className="space-y-2">
-
                 {/* NEVER */}
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-brown-primary/10 bg-white p-3 transition hover:bg-beige">
                   <input
@@ -271,13 +271,9 @@ const ShareFileModal = ({
                     checked={isCustomExpiry}
                     onChange={() => {
                       if (!isCustomExpiry) {
-                        const date = new Date(
-                          Date.now() + 24 * 60 * 60 * 1000,
-                        );
+                        const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-                        onExpiryChange(
-                          date.toISOString().slice(0, 16),
-                        );
+                        onExpiryChange(date.toISOString().slice(0, 16));
                       }
                     }}
                   />
@@ -292,9 +288,7 @@ const ShareFileModal = ({
                   <input
                     type="datetime-local"
                     value={shareExpiry}
-                    onChange={(event) =>
-                      onExpiryChange(event.target.value)
-                    }
+                    onChange={(event) => onExpiryChange(event.target.value)}
                     className="w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
                   />
                 )}
@@ -343,9 +337,7 @@ const ShareFileModal = ({
                 type="number"
                 min="1"
                 value={maxDownloads}
-                onChange={(event) =>
-                  onMaxDownloadsChange(event.target.value)
-                }
+                onChange={(event) => onMaxDownloadsChange(event.target.value)}
                 placeholder="Custom limit"
                 className="mt-3 w-full rounded-xl border border-brown-primary/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-brown-primary focus:ring-2 focus:ring-brown-primary/10"
               />
@@ -373,8 +365,7 @@ const ShareFileModal = ({
                 onClick={onCreateShareLink}
                 disabled={
                   loading ||
-                  (shareFile.visibility === "private" &&
-                    !sharePassword.trim())
+                  (shareFile.visibility === "private" && !sharePassword.trim())
                 }
                 className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark disabled:cursor-not-allowed disabled:opacity-60"
               >
