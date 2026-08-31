@@ -475,7 +475,22 @@ console.log("Creating signed URL for:", shareLink.storage_key);
       `,
       [shareLink.share_link_id],
     );
-
+await pool.execute(
+  `
+  INSERT INTO file_activities (
+    file_id,
+    user_id,
+    action
+  )
+  SELECT file_id, NULL, ?
+  FROM share_links
+  WHERE id = ?
+  `,
+  [
+    "DOWNLOAD",
+    shareLink.share_link_id,
+  ],
+);
     // ==========================================
     // 8. Return signed URL
     // ==========================================

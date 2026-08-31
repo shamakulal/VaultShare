@@ -339,15 +339,35 @@ export const downloadFile = asyncHandler(
     }
 
     // Return URL to frontend
-    return res.status(200).json({
-      success: true,
-      data: {
-        downloadUrl: data.signedUrl,
-        fileName: file.original_name,
-      },
-    });
-  },
+    // Increment download count for this file's share links
+// Record download activity
+await pool.execute(
+  `
+  INSERT INTO file_activities (
+    file_id,
+    user_id,
+    action
+  )
+  VALUES (?, ?, ?)
+  `,
+  [
+    fileId,
+    req.user.id,
+    "DOWNLOAD",
+  ],
 );
+
+// Return URL to frontend
+return res.status(200).json({
+  success: true,
+  data: {
+    downloadUrl: data.signedUrl,
+    fileName: file.original_name,
+  },
+});
+
+  }
+)
 
 
 export const updateFileVisibility = asyncHandler(
