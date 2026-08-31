@@ -24,7 +24,8 @@ interface ShareFileModalProps {
   onCreateShareLink: () => Promise<void>;
   onPasswordChange: (value: string) => void;
   onExpiryChange: React.Dispatch<React.SetStateAction<string>>;
-  onMaxDownloadsChange: React.Dispatch<React.SetStateAction<string>>;
+ onMaxDownloadsChange: React.Dispatch<React.SetStateAction<string>>;
+onOpenQRCode: () => void;
 }
 
 const ShareFileModal = ({
@@ -41,6 +42,7 @@ const ShareFileModal = ({
   onPasswordChange,
   onExpiryChange,
   onMaxDownloadsChange,
+  onOpenQRCode,
 }: ShareFileModalProps) => {
   if (!shareFile) {
     return null;
@@ -136,37 +138,45 @@ const ShareFileModal = ({
               className="mt-2 w-full rounded-xl border border-brown-primary/15 bg-beige px-3 py-3 text-sm text-brown-dark outline-none"
             />
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              {/* Copy */}
               <button
                 type="button"
                 onClick={onCopyShareLink}
-                className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
+                className="rounded-xl bg-brown-primary px-3 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
               >
-                Copy Link
+                Copy
               </button>
-              {createdShareUrl && (
-                <button
-                  type="button"
-                 // onClick={() => setShowQRCode(true)}
-                  className="rounded-xl border border-brown-primary/15 bg-cream px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige"
-                >
-                  QR Code
-                </button>
-              )}
+
+              {/* Open */}
               <button
                 type="button"
                 onClick={() => {
-                  window.open(createdShareUrl, "_blank", "noopener,noreferrer");
+                  window.open(
+                    createdShareUrl,
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
                 }}
-                className="rounded-xl bg-brown-primary px-4 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
+                className="rounded-xl bg-brown-primary px-3 py-3 text-sm font-bold text-cream transition hover:bg-brown-dark"
               >
                 ↗ Open
               </button>
 
+              {/* QR Code */}
+              <button
+                type="button"
+                onClick={onOpenQRCode}
+                className="rounded-xl border border-brown-primary/15 bg-cream px-3 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige"
+              >
+                ▣ QR
+              </button>
+
+              {/* Done */}
               <button
                 type="button"
                 onClick={onClose}
-                className="col-span-2 rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
+                className="col-span-3 rounded-xl bg-beige px-4 py-3 text-sm font-bold text-brown-dark transition hover:bg-beige-light"
               >
                 Done
               </button>

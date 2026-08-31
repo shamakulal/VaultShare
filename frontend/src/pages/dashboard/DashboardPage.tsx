@@ -969,7 +969,8 @@ const DashboardPage = () => {
         onPasswordChange={handleSharePasswordChange}
         onExpiryChange={setShareExpiry}
         onMaxDownloadsChange={setMaxDownloads}
-      />
+onOpenQRCode={() => setShowQRCode(true)}
+/>
       {showQRCode && createdShareUrl && (
         <QRCodeModal
           shareUrl={createdShareUrl}
