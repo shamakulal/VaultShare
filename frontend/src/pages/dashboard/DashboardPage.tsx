@@ -21,7 +21,7 @@ const DashboardPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
- 
+
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -214,7 +214,9 @@ const DashboardPage = () => {
 
       const body = {
         password: sharePassword.trim() || undefined,
-        expiresAt: shareExpiry || undefined,
+        expiresAt: shareExpiry
+          ? new Date(shareExpiry).toISOString()
+          : undefined,
         maxDownloads: maxDownloads ? Number(maxDownloads) : undefined,
       };
 

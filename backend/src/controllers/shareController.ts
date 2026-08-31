@@ -106,26 +106,37 @@ export const createShareLink = asyncHandler(
     // ==========================================
     // 8. Validate expiry date
     // ==========================================
-
     let validatedExpiresAt: string | null = null;
 
-    if (expiresAt) {
-      const expiryDate = new Date(expiresAt);
+if (expiresAt) {
+  const expiryString = String(expiresAt).trim();
 
-      if (Number.isNaN(expiryDate.getTime())) {
-        throw new AppError("Invalid expiry date", 400);
-      }
+  // Accept:
+  // YYYY-MM-DDTHH:mm
+  // YYYY-MM-DDTHH:mm:ss
+  // YYYY-MM-DDTHH:mm:ss.sssZ
 
-      if (expiryDate <= new Date()) {
-        throw new AppError("Expiry date must be in the future", 400);
-      }
+  const expiryDate = new Date(expiryString);
 
-      validatedExpiresAt = expiryDate
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-    }
+  if (Number.isNaN(expiryDate.getTime())) {
+    throw new AppError("Invalid expiry date", 400);
+  }
 
+  if (expiryDate.getTime() <= Date.now()) {
+    throw new AppError("Expiry date must be in the future", 400);
+  }
+
+  // Store as MySQL DATETIME
+  const year = expiryDate.getFullYear();
+  const month = String(expiryDate.getMonth() + 1).padStart(2, "0");
+  const day = String(expiryDate.getDate()).padStart(2, "0");
+  const hours = String(expiryDate.getHours()).padStart(2, "0");
+  const minutes = String(expiryDate.getMinutes()).padStart(2, "0");
+  const seconds = String(expiryDate.getSeconds()).padStart(2, "0");
+
+  validatedExpiresAt =
+    `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
     // ==========================================
     // 9. Create share link in database
     // ==========================================
@@ -219,9 +230,12 @@ export const getShareLinkDetails = asyncHandler(
     }
 
     // Check expiry
-    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
-      throw new AppError("This share link has expired", 403);
-    }
+    // if (
+    //   shareLink.expires_at &&
+    //   new Date(shareLink.expires_at.replace(" ", "T")) <= new Date()
+    // ) {
+    //   throw new AppError("This share link has expired", 403);
+    // }
 
     // Check download limit
     if (
@@ -294,9 +308,12 @@ export const verifySharePassword = asyncHandler(
     }
 
     // 4. Check expiry
-    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
-      throw new AppError("This share link has expired", 403);
-    }
+    // if (
+    //   shareLink.expires_at &&
+    //   new Date(shareLink.expires_at.replace(" ", "T")) <= new Date()
+    // ) {
+    //   throw new AppError("This share link has expired", 403);
+    // }
 
     // 5. If no password exists, no verification needed
     if (!shareLink.password_hash) {
@@ -385,25 +402,23 @@ export const downloadSharedFile = asyncHandler(
     // ==========================================
 
     if (!shareLink.is_active) {
-      throw new AppError(
-        "This share link has been disabled",
-        403,
-      );
+      throw new AppError("This share link has been disabled", 403);
     }
 
     // ==========================================
     // 3. Check expiry
     // ==========================================
 
-    if (
-      shareLink.expires_at &&
-      new Date(shareLink.expires_at) < new Date()
-    ) {
-      throw new AppError(
-        "This share link has expired",
-        403,
-      );
-    }
+   if (shareLink.expires_at) {
+  const expiryTime =
+    shareLink.expires_at instanceof Date
+      ? shareLink.expires_at.getTime()
+      : new Date(shareLink.expires_at).getTime();
+
+  if (expiryTime <= Date.now()) {
+    throw new AppError("This share link has expired", 403);
+  }
+}
 
     // ==========================================
     // 4. Check download limit
@@ -413,10 +428,7 @@ export const downloadSharedFile = asyncHandler(
       shareLink.max_downloads !== null &&
       shareLink.download_count >= shareLink.max_downloads
     ) {
-      throw new AppError(
-        "Maximum download limit has been reached",
-        403,
-      );
+      throw new AppError("Maximum download limit has been reached", 403);
     }
 
     // ==========================================
@@ -424,12 +436,9 @@ export const downloadSharedFile = asyncHandler(
     // ==========================================
 
     if (shareLink.password_hash) {
-      const accessCookieName =
-        `share_access_${shareLink.share_link_id}`;
+      const accessCookieName = `share_access_${shareLink.share_link_id}`;
 
-      if (
-        req.cookies?.[accessCookieName] !== "verified"
-      ) {
+      if (req.cookies?.[accessCookieName] !== "verified") {
         throw new AppError(
           "Password verification is required before downloading",
           401,
@@ -443,24 +452,15 @@ export const downloadSharedFile = asyncHandler(
 
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET!)
-      .createSignedUrl(
-        shareLink.storage_key,
-        60,
-        {
-          download: true,
-        },
-      );
-
+      
+      .createSignedUrl(shareLink.storage_key, 60, {
+        download: true,
+      });
+console.log("Creating signed URL for:", shareLink.storage_key);
     if (error || !data?.signedUrl) {
-      console.error(
-        "Supabase signed URL error:",
-        error,
-      );
+      console.error("Supabase signed URL error:", error);
 
-      throw new AppError(
-        "Failed to create download URL",
-        500,
-      );
+      throw new AppError("Failed to create download URL", 500);
     }
 
     // ==========================================
