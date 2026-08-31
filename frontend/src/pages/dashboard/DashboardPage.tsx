@@ -730,19 +730,32 @@ const DashboardPage = () => {
         </section>
 
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          {/* Search */}
+          {/* ================= SMART SEARCH ================= */}
           <div className="relative w-full md:max-w-md">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brown-warm">
+            {/* Search icon */}
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-brown-warm">
               🔍
             </span>
 
             <input
               type="text"
-              placeholder="Search your files..."
+              placeholder="Search files by name..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="w-full rounded-xl border border-brown-primary/15 bg-cream py-3 pl-11 pr-4 text-sm text-brown-dark outline-none transition placeholder:text-brown-warm/60 focus:border-brown-primary focus:ring-4 focus:ring-brown-primary/10"
+              className="w-full rounded-xl border border-brown-primary/15 bg-cream py-3 pl-11 pr-11 text-sm text-brown-dark outline-none transition placeholder:text-brown-warm/60 focus:border-brown-primary focus:ring-4 focus:ring-brown-primary/10"
             />
+
+            {/* Clear search */}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-sm font-bold text-brown-warm transition hover:bg-beige hover:text-brown-dark"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
 
           {/* Filter */}
@@ -814,7 +827,9 @@ const DashboardPage = () => {
             </h3>
 
             <p className="mt-2 text-sm text-brown-warm">
-              Try changing your search or filter.
+              {searchQuery
+                ? `No files match "${searchQuery}".`
+                : "Try changing your search or filter."}
             </p>
 
             <button
