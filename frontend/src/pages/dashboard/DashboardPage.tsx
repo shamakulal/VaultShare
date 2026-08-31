@@ -332,14 +332,26 @@ const DashboardPage = () => {
 
       // Direct browser download.
       // Do NOT fetch the Supabase URL from JavaScript.
+      // Download using the original uploaded filename
+      const downloadResponse = await fetch(data.data.downloadUrl);
+
+      if (!downloadResponse.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      const blob = await downloadResponse.blob();
+
+      const blobUrl = window.URL.createObjectURL(blob);
+
       const link = document.createElement("a");
-      link.href = data.data.downloadUrl;
+      link.href = blobUrl;
       link.download = data.data.fileName || "download";
-      link.target = "_self";
 
       document.body.appendChild(link);
       link.click();
       link.remove();
+
+      window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Download error:", error);
 
@@ -392,46 +404,42 @@ const DashboardPage = () => {
     }
   };
   const handleOpenDownloadAnalytics = async (file: FileItem) => {
-  try {
-    setAnalyticsFile(file);
-    setShowDownloadAnalytics(true);
-    setAnalyticsDownloadCount(0);
+    try {
+      setAnalyticsFile(file);
+      setShowDownloadAnalytics(true);
+      setAnalyticsDownloadCount(0);
 
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/files/${file.id}/analytics`,
-      {
-        method: "GET",
-        credentials: "include",
-      },
-    );
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/files/${file.id}/analytics`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
 
-    const contentType = response.headers.get("content-type") || "";
+      const contentType = response.headers.get("content-type") || "";
 
-    if (!contentType.includes("application/json")) {
-      const text = await response.text();
-      throw new Error(text || "Failed to load analytics");
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error(text || "Failed to load analytics");
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load analytics");
+      }
+
+      setAnalyticsDownloadCount(Number(data.data?.downloadCount || 0));
+    } catch (error) {
+      console.error("Analytics error:", error);
+
+      showToast(
+        error instanceof Error ? error.message : "Failed to load analytics",
+        "error",
+      );
     }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || "Failed to load analytics");
-    }
-
-    setAnalyticsDownloadCount(
-      Number(data.data?.downloadCount || 0),
-    );
-  } catch (error) {
-    console.error("Analytics error:", error);
-
-    showToast(
-      error instanceof Error
-        ? error.message
-        : "Failed to load analytics",
-      "error",
-    );
-  }
-};
+  };
   const handleVisibilityChange = async (
     fileId: number,
     newVisibility: "private" | "public",
@@ -986,7 +994,7 @@ const DashboardPage = () => {
                       {/* ANALYTICS */}
                       <button
                         type="button"
-                       onClick={() => handleOpenDownloadAnalytics(file)}
+                        onClick={() => handleOpenDownloadAnalytics(file)}
                         className="rounded-xl border border-brown-primary/20 bg-cream px-3 py-2 text-sm font-semibold text-brown-dark transition hover:bg-beige"
                       >
                         Analytics
